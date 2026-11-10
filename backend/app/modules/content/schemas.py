@@ -31,6 +31,20 @@ class IdeaOut(BaseModel):
     created_at: datetime
 
 
+class IdeaSuggestionOut(BaseModel):
+    """Una pregunta para recordar, con la idea del banco de la que sale. No se guarda en ningún lado."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    question: str
+    idea_id: int
+    idea_note: str
+
+
+class IdeaSuggestionsOut(BaseModel):
+    suggestions: list[IdeaSuggestionOut]
+
+
 # ---------------------------------------------------------------- posts
 class PostCreate(BaseModel):
     text: str = ""

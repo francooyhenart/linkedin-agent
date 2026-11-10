@@ -51,6 +51,27 @@ def test_el_panel_conoce_el_estado_publishing():
     assert 'id="edSalio"' in HTML and 'id="edNoSalio"' in HTML  # "Sí, salió" / "No salió"
 
 
+def test_el_menu_lateral_agrupa_por_modulo_y_deja_ajustes_aparte():
+    assert '<header class="top">' not in HTML  # ya no hay barra superior
+    group = re.search(r'<div class="grp" data-module="content">(.*?)</div>', HTML, re.S).group(1)
+    assert "Contenido" in group
+    assert re.findall(r'href="(#\w+)"', group) == ["#calendario", "#ideas", "#metricas"]
+    assert 'class="settings" href="#ajustes"' in HTML
+    assert 'id="health"' in HTML.split('<aside class="side"')[1].split("</aside>")[0]  # los indicadores, al pie del menú
+    assert 'id="menuBtn"' in HTML and 'aria-controls="side"' in HTML  # el botón de pantallas chicas
+
+
+def test_borrar_una_idea_pide_confirmacion():
+    handler = HTML.split('dataset.a === "del"')[1].split("openEditor")[0]
+    assert handler.index("confirm(") < handler.index("DELETE")
+
+
+def test_sugerir_ideas_no_guarda_nada_por_su_cuenta():
+    # La única llamada que crea ideas en ese bloque es la de "Guardar idea" de una respuesta escrita por la persona.
+    block = HTML.split('$("#suggestBtn").onclick')[1].split("async function planNext")[0]
+    assert block.count('${API}/ideas`, { method: "POST"') == 1
+
+
 def test_get_raiz_sirve_el_panel():
     response = TestClient(app).get("/")
     assert response.status_code == 200

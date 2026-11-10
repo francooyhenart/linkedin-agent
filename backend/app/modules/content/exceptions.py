@@ -2,7 +2,7 @@
 
 Cada uno hereda de una base genérica (core/exceptions.py), que es la que main.py sabe traducir a HTTP.
 """
-from app.core.exceptions import InvalidInputError, NotFoundError
+from app.core.exceptions import ExternalServiceError, InvalidInputError, NotFoundError
 
 
 class PostNotFoundError(NotFoundError):
@@ -29,12 +29,20 @@ class NoUnusedIdeasError(InvalidInputError):
     default_message = "No hay ideas sin usar. Cargá algunas en Ideas."
 
 
+class NoIdeasToSuggestFromError(InvalidInputError):
+    default_message = "Primero anotá al menos una idea: las sugerencias salen de tu banco de ideas."
+
+
 class NoPublishDaysError(InvalidInputError):
     default_message = "Elegí al menos un día de publicación en Ajustes."
 
 
 class InvalidSettingError(InvalidInputError):
     default_message = "Ajuste inválido."
+
+
+class NoUsefulSuggestionsError(ExternalServiceError):
+    default_message = "El modelo no devolvió sugerencias que sirvan. Probá de nuevo."
 
 
 class ReservedStatusError(InvalidInputError):

@@ -30,16 +30,25 @@ button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 a{color:inherit}
 
-.top{display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;padding:.9rem clamp(1rem,3vw,2rem);border-bottom:1px solid var(--line);background:var(--surface)}
-.brand{font-weight:700;font-size:1.15rem;letter-spacing:-.01em;display:flex;align-items:center;gap:.45rem}
+/* Estructura: menú lateral + contenido. En pantallas chicas el menú pasa a ser un cajón que abre un botón. */
+.app{display:grid;grid-template-columns:15rem minmax(0,1fr);min-height:100vh}
+.side{position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:1.4rem;padding:1.1rem .8rem;background:var(--surface);border-right:1px solid var(--line)}
+.brand{font-weight:700;font-size:1.15rem;letter-spacing:-.01em;display:flex;align-items:center;gap:.45rem;padding:0 .5rem}
 .brand i{display:inline-block;width:.9rem;height:.55rem;background:var(--mark);transform:skewX(-14deg)}
-nav{display:flex;gap:.25rem}
-nav a{padding:.4rem .7rem;border-radius:6px;text-decoration:none;color:var(--muted);font-weight:500}
-nav a[aria-current="page"]{color:var(--ink);background:var(--soft)}
-.health{margin-left:auto;display:flex;gap:1rem;color:var(--muted);font-size:.85rem}
+.side nav{flex:1;display:flex;flex-direction:column;gap:1.1rem}
+.grp{display:flex;flex-direction:column;gap:.15rem}
+.grp-title{margin:0 0 .25rem;padding:0 .5rem;font-size:.72rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.side nav a{position:relative;padding:.45rem .5rem .45rem 1.05rem;border-radius:6px;text-decoration:none;color:var(--muted);font-weight:500}
+.side nav a:hover{color:var(--ink)}
+.side nav a[aria-current="page"]{color:var(--ink);background:var(--soft)}
+/* el resaltador de la marca, como marca de la sección activa */
+.side nav a[aria-current="page"]::before{content:"";position:absolute;left:.25rem;top:50%;width:.3rem;height:.9rem;margin-top:-.45rem;background:var(--mark);transform:skewX(-14deg)}
+.side nav .settings{margin-top:auto}
+.health{display:flex;flex-direction:column;gap:.4rem;padding:.8rem .5rem 0;border-top:1px solid var(--line);color:var(--muted);font-size:.85rem}
 .health span::before{content:"";display:inline-block;width:.5rem;height:.5rem;border-radius:50%;margin-right:.4rem;background:var(--fail);vertical-align:.05rem}
 .health span.ok::before{background:#3E9B62}
 .health span.warn::before{background:var(--ready)}
+.mobilebar,.scrim{display:none}
 
 main{padding:clamp(1rem,3vw,2rem);max-width:1240px;margin:0 auto}
 [hidden]{display:none !important}
@@ -88,8 +97,16 @@ h2{font-size:1.1rem;margin:0 0 .6rem;font-weight:600}
   .day{min-height:76px;padding:.25rem}
   .chip{font-size:0;padding:0;height:.5rem;border-width:2px}
   .chip.s-published{border-width:2px}
-  .health{margin-left:0;width:100%}
 }
+@media (max-width:860px){
+  .app{display:block}
+  .mobilebar{display:flex;align-items:center;gap:.7rem;position:sticky;top:0;z-index:20;padding:.55rem 1rem;background:var(--surface);border-bottom:1px solid var(--line)}
+  .mobilebar .brand{padding:0}
+  .side{position:fixed;top:0;bottom:0;left:0;z-index:40;width:min(17rem,86vw);height:auto;transform:translateX(-100%);visibility:hidden;transition:transform .18s ease-out,visibility 0s .18s}
+  .side.open{transform:none;visibility:visible;transition:transform .18s ease-out}
+  .scrim{display:block;position:fixed;inset:0;z-index:30;background:rgb(10 14 12 / .4)}
+}
+@media (prefers-reduced-motion:reduce){.side,.side.open{transition:none}}
 
 /* editor */
 dialog{margin:0 0 0 auto;height:100%;max-height:100%;width:min(560px,100%);border:none;padding:0;background:var(--surface);color:var(--ink);border-left:1px solid var(--line)}
@@ -132,6 +149,10 @@ details[open] summary{margin-bottom:.6rem}
 .ideas li.used p{color:var(--muted)}
 .tag{font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 .35rem;white-space:nowrap}
 .empty{color:var(--muted);padding:1.5rem 0;max-width:52ch}
+.sg{flex:1;display:flex;flex-direction:column;gap:.25rem;max-width:70ch}
+.sg-q{background:none;border:none;padding:0;text-align:left;cursor:pointer;font-weight:500}
+.sg-q:hover{text-decoration:underline}
+.sg-answer{margin-top:.4rem}
 
 /* métricas */
 .stats{display:flex;gap:2.5rem;flex-wrap:wrap;margin:0 0 1.4rem}
@@ -162,16 +183,29 @@ ol.help{padding-left:1.1rem}
 </style>
 </head>
 <body>
-<header class="top">
+<div class="app">
+<!-- Barra solo para pantallas chicas: marca + botón que abre el menú -->
+<header class="mobilebar">
+  <button class="btn icon" id="menuBtn" aria-label="Abrir menú" aria-expanded="false" aria-controls="side">☰</button>
+  <div class="brand"><i aria-hidden="true"></i>Postline</div>
+</header>
+<div class="scrim" id="scrim" hidden></div>
+
+<aside class="side" id="side">
   <div class="brand"><i aria-hidden="true"></i>Postline</div>
   <nav aria-label="Secciones">
-    <a href="#calendario">Calendario</a>
-    <a href="#ideas">Ideas</a>
-    <a href="#metricas">Métricas</a>
-    <a href="#ajustes">Ajustes</a>
+    <!-- Un bloque .grp por módulo. Para sumar "Empleos": copiar este bloque con otro título y sus enlaces
+         (href="#vista", y esa vista se registra en VIEWS más abajo). -->
+    <div class="grp" data-module="content">
+      <h2 class="grp-title">Contenido</h2>
+      <a href="#calendario">Calendario</a>
+      <a href="#ideas">Ideas</a>
+      <a href="#metricas">Métricas</a>
+    </div>
+    <a class="settings" href="#ajustes">Ajustes</a>
   </nav>
   <div class="health" id="health"></div>
-</header>
+</aside>
 
 <main>
   <!-- CALENDARIO -->
@@ -199,15 +233,22 @@ ol.help{padding-left:1.1rem}
 
   <!-- IDEAS -->
   <section id="v-ideas" hidden>
-    <div class="bar"><h1>Ideas</h1><span class="spacer"></span><button class="btn" id="planBtn2">Planificar próximos posts</button></div>
+    <div class="bar"><h1>Ideas</h1><span class="spacer"></span><button class="btn" id="suggestBtn">Sugerir ideas</button><button class="btn" id="planBtn2">Planificar próximos posts</button></div>
     <div class="cols">
-      <div class="panel">
-        <h2>Anotá algo que te pasó</h2>
-        <p class="help">En castellano y desprolijo está bien. Cuanto más concreto (qué hiciste, qué herramienta, qué aprendiste), menos va a sonar a IA el post.</p>
-        <label class="f" style="margin-top:.8rem">
-          <textarea id="ideaNote" aria-label="Nota" rows="5" placeholder="Ej: hoy migré un cron viejo a una cola con Redis, tardé 2 días porque nadie sabía qué hacía el script"></textarea>
-        </label>
-        <div class="bar" style="margin:.7rem 0 0"><span class="spacer"></span><button class="btn primary" id="addIdea">Guardar idea</button></div>
+      <div class="stack" style="max-width:none">
+        <div class="panel">
+          <h2>Anotá algo que te pasó</h2>
+          <p class="help">En castellano y desprolijo está bien. Cuanto más concreto (qué hiciste, qué herramienta, qué aprendiste), menos va a sonar a IA el post.</p>
+          <label class="f" style="margin-top:.8rem">
+            <textarea id="ideaNote" aria-label="Nota" rows="5" placeholder="Ej: hoy migré un cron viejo a una cola con Redis, tardé 2 días porque nadie sabía qué hacía el script"></textarea>
+          </label>
+          <div class="bar" style="margin:.7rem 0 0"><span class="spacer"></span><button class="btn primary" id="addIdea">Guardar idea</button></div>
+        </div>
+        <div class="panel" id="suggestPanel" hidden>
+          <h2>Para recordar</h2>
+          <p class="help">Preguntas sobre cosas que ya anotaste. Tocá una, respondela con tus palabras y recién ahí se guarda como idea. Nada se guarda solo.</p>
+          <ul class="ideas" id="suggestList"></ul>
+        </div>
       </div>
       <div class="panel"><h2>Banco de ideas</h2><ul class="ideas" id="ideaList"></ul></div>
     </div>
@@ -251,6 +292,7 @@ ol.help{padding-left:1.1rem}
     </div>
   </section>
 </main>
+</div>
 
 <!-- EDITOR -->
 <dialog id="ed" aria-labelledby="edTitle">
@@ -589,9 +631,45 @@ $("#addIdea").onclick = act(async () => {
 $("#ideaList").addEventListener("click", act(async e => {
   const b = e.target.closest("button[data-a]"); if (!b) return;
   const id = +b.closest("li").dataset.id;
-  if (b.dataset.a === "del") { await api(`${API}/ideas/${id}`, { method: "DELETE" }); renderIdeas(); return; }
+  if (b.dataset.a === "del") {
+    if (!confirm("¿Eliminar esta idea?")) return;
+    await api(`${API}/ideas/${id}`, { method: "DELETE" }); renderIdeas(); return;
+  }
   openEditor({ note: S.ideas[id].note, idea_id: id, status: "draft" });
   await busy($("#edGen"), "Escribiendo…", () => generateInto());
+}));
+
+/* "Sugerir ideas": preguntas del modelo sobre ideas que ya existen. Viven solo en pantalla (S.suggestions):
+   nada se guarda hasta que la persona escribe su respuesta y toca "Guardar idea". */
+function renderSuggestions() {
+  const list = S.suggestions || [];
+  $("#suggestPanel").hidden = !list.length;
+  $("#suggestList").innerHTML = list.map((s, i) => {
+    const about = s.idea_note.replace(/\s+/g, " ");
+    return `<li data-i="${i}"><div class="sg">
+      <button class="sg-q" data-a="open" aria-expanded="false">${esc(s.question)}</button>
+      <small class="muted">Sobre: “${esc(about.length > 80 ? about.slice(0, 80) + "…" : about)}”</small>
+      <div class="sg-answer" hidden>
+        <textarea rows="3" aria-label="Tu respuesta" placeholder="Contalo con tus palabras"></textarea>
+        <div class="bar" style="margin:.5rem 0 0"><button class="btn primary" data-a="save">Guardar idea</button><button class="btn ghost" data-a="cancel">Cancelar</button></div>
+      </div></div></li>`;
+  }).join("");
+}
+$("#suggestBtn").onclick = act(async e => {
+  const { suggestions } = await busy(e.currentTarget, "Pensando…", () => api(`${API}/ideas/suggest`, { method: "POST" }));
+  S.suggestions = suggestions; renderSuggestions();
+});
+$("#suggestList").addEventListener("click", act(async e => {
+  const b = e.target.closest("button[data-a]"); if (!b) return;
+  const li = b.closest("li"), answer = li.querySelector(".sg-answer"), q = li.querySelector(".sg-q");
+  const setOpen = open => { answer.hidden = !open; q.setAttribute("aria-expanded", open); if (open) answer.querySelector("textarea").focus(); };
+  if (b.dataset.a === "open") return setOpen(answer.hidden);
+  if (b.dataset.a === "cancel") return setOpen(false);
+  const note = answer.querySelector("textarea").value.trim();
+  if (!note) throw new Error("Escribí tu respuesta primero.");
+  await api(`${API}/ideas`, { method: "POST", body: { note } });
+  S.suggestions.splice(+li.dataset.i, 1);   // esa pregunta ya se respondió: sale de la lista
+  renderSuggestions(); toast("Idea guardada."); renderIdeas();
 }));
 
 async function planNext(btn) {
@@ -699,6 +777,19 @@ function route() {
   refresh();
 }
 window.addEventListener("hashchange", route);
+
+/* Menú lateral en pantallas chicas: un botón lo abre como cajón; se cierra con el fondo, Esc o al elegir una sección. */
+function setMenu(open) {
+  if ($("#side").classList.contains("open") === open) return;   // ya está así: no tocar el foco
+  $("#side").classList.toggle("open", open); $("#scrim").hidden = !open;
+  $("#menuBtn").setAttribute("aria-expanded", open); $("#menuBtn").setAttribute("aria-label", open ? "Cerrar menú" : "Abrir menú");
+  if (open) $("#side nav a").focus(); else if (document.activeElement?.closest("#side")) $("#menuBtn").focus();
+}
+$("#menuBtn").onclick = () => setMenu(!$("#side").classList.contains("open"));
+$("#scrim").onclick = () => setMenu(false);
+$("#side").addEventListener("click", e => { if (e.target.closest("a")) setMenu(false); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && $("#side").classList.contains("open") && !$("#ed").open) setMenu(false); });
+matchMedia("(min-width: 861px)").addEventListener("change", e => { if (e.matches) setMenu(false); });
 act(async () => {
   await Promise.all([loadSettings(), loadStatus()]);
   route();

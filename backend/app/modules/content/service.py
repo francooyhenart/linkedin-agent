@@ -28,9 +28,11 @@ from app.modules.content.exceptions import (
     IdeaNotFoundError,
     InvalidDateError,
     InvalidSettingError,
+    NoIdeasToSuggestFromError,
     NoPublishDaysError,
     NoUnusedIdeasError,
     NothingToGenerateFromError,
+    NoUsefulSuggestionsError,
     PostNotFoundError,
     ReservedStatusError,
 )
@@ -49,6 +51,7 @@ from app.shared.llm.ollama import LLMStatus
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3  # intentos de generación si el texto no pasa los chequeos
+SUGGESTION_SOURCE_LIMIT = 20  # cuántas ideas del banco se le muestran al modelo para sugerir preguntas
 
 # Ajustes que el usuario puede ver y editar. Los tokens de LinkedIn (li_*) viven en la misma tabla
 # pero NO están en esta lista, así que nunca salen por la API de ajustes.
@@ -82,6 +85,15 @@ class UserSettings:
 class GenerationResult:
     text: str
     warnings: list[str]
+
+
+@dataclass
+class IdeaSuggestion:
+    """Una pregunta sugerida y la idea del banco sobre la que se hizo."""
+
+    question: str
+    idea_id: int
+    idea_note: str
 
 
 @dataclass
@@ -165,6 +177,28 @@ class ContentService:
     def delete_idea(self, idea_id: int) -> None:
         self.repo.delete_idea(idea_id)  # si no existía, no pasa nada (igual que antes)
         self.session.commit()
+
+    def suggest_ideas(self) -> list[IdeaSuggestion]:
+        """Propone preguntas para recordar experiencias, a partir del banco de ideas. NO guarda nada.
+
+        Lee las ideas, cierra la transacción (el modelo puede tardar) y recién después le pregunta al modelo.
+        Cada sugerencia queda atada a la idea de la que sale: lo que el modelo diga sin apuntar a una idea
+        real se descarta (ver prompts.parse_suggestions), así no llegan temas genéricos ni inventados."""
+        settings = self.get_user_settings()
+        # Las sin usar primero (list_ideas ya las ordena así) y un tope, para que el prompt no crezca sin límite.
+        source = [(idea.id, idea.note) for idea in self.repo.list_ideas()[:SUGGESTION_SOURCE_LIMIT]]
+        if not source:
+            raise NoIdeasToSuggestFromError()
+        self.session.commit()  # cierra la transacción de lectura antes de esperar al modelo
+
+        system = prompts.build_suggestions_system_prompt()
+        user = prompts.build_suggestions_user_prompt([note for _, note in source])
+        for _ in range(MAX_ATTEMPTS):
+            raw = self.writer.write(system, user, settings.model)
+            parsed = prompts.parse_suggestions(raw, note_count=len(source))
+            if parsed:  # con alguna válida alcanza: mejor 3 buenas que insistir hasta tener 5
+                return [IdeaSuggestion(question, *source[number - 1]) for number, question in parsed]
+        raise NoUsefulSuggestionsError()
 
     # ------------------------------------------------------------------ posts
     def list_posts(

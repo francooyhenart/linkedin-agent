@@ -16,6 +16,7 @@ from app.modules.content.schemas import (
     GenerateOut,
     IdeaCreate,
     IdeaOut,
+    IdeaSuggestionsOut,
     MetricsIn,
     MetricSnapshotOut,
     PlanOut,
@@ -67,6 +68,13 @@ def list_ideas(service: Service):
 @router.post("/ideas", response_model=IdeaOut)
 def create_idea(body: IdeaCreate, service: Service):
     return service.create_idea(body)
+
+
+@router.post("/ideas/suggest", response_model=IdeaSuggestionsOut)
+def suggest_ideas(service: Service):
+    """Preguntas para recordar experiencias, sacadas del banco de ideas. No guarda nada: el panel guarda
+    la respuesta como idea (POST /ideas) solo cuando la persona la escribe."""
+    return IdeaSuggestionsOut(suggestions=service.suggest_ideas())
 
 
 @router.delete("/ideas/{idea_id}")
