@@ -30,6 +30,9 @@ class PostStatus(str, Enum):
     DRAFT = "draft"  # borrador
     APPROVED = "approved"  # programado: sale solo a su hora
     READY = "ready"  # hay que publicarlo a mano
+    # La app lo reclamó y está llamando a LinkedIn. Si queda así, NO se sabe si salió: se verifica a mano.
+    # Nunca se reintenta solo (así no se duplican posts).
+    PUBLISHING = "publishing"
     PUBLISHED = "published"
     FAILED = "failed"
 
@@ -85,7 +88,7 @@ class Post(TimestampMixin, Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('draft', 'approved', 'ready', 'published', 'failed')",
+            "status IN ('draft', 'approved', 'ready', 'publishing', 'published', 'failed')",
             name="status_valid",
         ),
         # El calendario filtra por rango de fechas y el scheduler por "ya le toca": ambos usan scheduled_at.

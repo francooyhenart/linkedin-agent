@@ -35,7 +35,8 @@ class Settings(BaseSettings):
     timezone: str = "America/Argentina/Buenos_Aires"
 
     # --- Ollama (modelo local) ---
-    ollama_url: str = "http://localhost:11434"
+    # 127.0.0.1 y no "localhost": en Windows localhost puede resolver primero a IPv6 y colgarse.
+    ollama_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.1:8b"
 
     # --- LinkedIn (opcional) ---
@@ -46,6 +47,8 @@ class Settings(BaseSettings):
     # --- Scheduler ---
     # Si un post quedó atrasado más que esto, no se publica solo: pasa a "ready".
     max_late_hours: int = 12
+    # False = no arranca el scheduler (no se publica nada solo). Lo usan los tests y sirve para depurar.
+    scheduler_enabled: bool = True
 
     @field_validator("timezone")
     @classmethod

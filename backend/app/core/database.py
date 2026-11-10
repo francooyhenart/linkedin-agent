@@ -51,6 +51,9 @@ class TimestampMixin:
 engine = create_engine(
     get_settings().database_url,
     pool_pre_ping=True,
+    # Si una consulta falla, SQLAlchemy mete los parámetros en el mensaje de error. Con esto no: así un token
+    # de LinkedIn (que se guarda con un INSERT en settings) nunca puede terminar escrito en un log.
+    hide_parameters=True,
     connect_args={"connect_timeout": 3},
 )
 
