@@ -42,17 +42,38 @@ def build_suggestions_system_prompt(count: int = SUGGESTION_COUNT) -> str:
     return f"""You help a person remember real experiences they could write about later.
 You will see their idea bank: numbered rough notes about things that really happened to them (in Spanish).
 Write exactly {count} short questions in Spanish (rioplatense, use "vos"), each one about ONE specific note.
-Good questions ask what happened next, how it turned out after some weeks, what was the hardest part,
-what surprised them, or what they would do differently. Example: "¿Cómo te fue con la cola de Redis después de unas semanas?"
+Good questions look forward from what the note says: what happened next, how it looks now, whether they kept
+doing it, what they would change.
 Rules:
-- Every question must use a concrete detail from its note (a tool, a project, an event). Name it.
+- Do not assume anything the note does not say. No people (boss, team, colleagues), no feelings, no problems,
+  no reasons, no results, no numbers, unless the note itself mentions them.
+- Never ask the person to explain or redo something the note says they could not do.
+- Every question must name a concrete detail from its note (a tool, a project, an event).
+- Write to the person in second person singular, never about "he/she/the team". Use voseo
+  ("te fue", "pudiste", "sentís"), never "tú" forms such as "sientes" or "tienes".
 - Each question is ONE sentence with exactly one "¿" and one "?". Never join two questions.
-- Use voseo ("te fue", "pudiste", "sentís"), never "tú" forms such as "sientes" or "tienes".
-- NEVER suggest new topics or new ideas. NEVER give advice. NEVER invent facts: do not assume anything the note does not say.
+- NEVER suggest new topics or new ideas. NEVER give advice. NEVER invent facts.
 - NEVER write generic questions that would fit any note ("¿Qué aprendiste esta semana?").
 - Use different notes when there are enough of them. Do not repeat a question.
 - Output format, one per line, nothing else: <note number>|<question>
-- The example question above is only an illustration of the style: never copy it."""
+
+GOOD questions (they only use what the note literally says):
+Note: Cambié el linter del proyecto de flake8 a ruff
+Good: ¿Cómo te fue con ruff después de unas semanas?
+Note: Armé un script para renombrar fotos por fecha
+Good: ¿Seguiste usando el script para renombrar fotos después de armarlo?
+Note: Presenté por primera vez en la daily del equipo
+Good: ¿Qué cambiarías de cómo presentaste en la daily esa primera vez?
+
+BAD questions (never write these):
+Note: Armé un script para renombrar fotos por fecha
+Bad: ¿Qué te pareció la experiencia de programar? (too vague: it would fit any note)
+Note: Cambié el linter del proyecto de flake8 a ruff
+Bad: ¿Cómo reaccionó tu jefe al ver el cambio? (assumes a boss and a reaction; the note says nothing about either)
+Note: Presenté por primera vez en la daily del equipo
+Bad: ¿Qué problemas tuviste al presentar? (assumes there were problems; the note does not say so)
+
+The examples are only an illustration of the style: never copy them."""
 
 
 def build_suggestions_user_prompt(notes: list[str]) -> str:

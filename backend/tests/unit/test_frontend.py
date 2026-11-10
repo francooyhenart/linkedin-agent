@@ -72,6 +72,17 @@ def test_sugerir_ideas_no_guarda_nada_por_su_cuenta():
     assert block.count('${API}/ideas`, { method: "POST"') == 1
 
 
+def test_la_respuesta_a_una_sugerencia_se_guarda_con_su_pregunta():
+    block = HTML.split('$("#suggestList").addEventListener')[1].split("async function planNext")[0]
+    assert "note: `${question}\\n${note}`" in block
+
+
+def test_el_punto_rojo_del_menu_depende_del_modelo_y_del_vencimiento_de_linkedin():
+    load = HTML.split("async function loadStatus()")[1].split("async function loadSettings")[0]
+    assert 'classList.toggle("alert", !o.ok || liSoon)' in load
+    assert "#menuBtn.alert::after" in HTML
+
+
 def test_get_raiz_sirve_el_panel():
     response = TestClient(app).get("/")
     assert response.status_code == 200

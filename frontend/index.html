@@ -49,6 +49,9 @@ a{color:inherit}
 .health span.ok::before{background:#3E9B62}
 .health span.warn::before{background:var(--ready)}
 .mobilebar,.scrim{display:none}
+/* punto rojo en el ☰ (solo existe en pantallas chicas): el modelo no responde o el permiso de LinkedIn venció / está por vencer */
+#menuBtn{position:relative}
+#menuBtn.alert::after{content:"";position:absolute;top:.2rem;right:.2rem;width:.55rem;height:.55rem;border-radius:50%;background:var(--fail);border:2px solid var(--surface);box-sizing:content-box}
 
 main{padding:clamp(1rem,3vw,2rem);max-width:1240px;margin:0 auto}
 [hidden]{display:none !important}
@@ -246,7 +249,7 @@ ol.help{padding-left:1.1rem}
         </div>
         <div class="panel" id="suggestPanel" hidden>
           <h2>Para recordar</h2>
-          <p class="help">Preguntas sobre cosas que ya anotaste. Tocá una, respondela con tus palabras y recién ahí se guarda como idea. Nada se guarda solo.</p>
+          <p class="help">Preguntas sobre cosas que ya anotaste. Tocá una, respondela con tus palabras y recién ahí se guarda como idea, junto con la pregunta para que tenga contexto. Nada se guarda solo.</p>
           <ul class="ideas" id="suggestList"></ul>
         </div>
       </div>
@@ -413,6 +416,11 @@ async function loadStatus() {
   const verWarn = li.api_version_outdated ? `<span class="warn">API de LinkedIn: actualizá la versión (${li.api_version_age_months} meses)</span>` : "";
   $("#health").innerHTML = `<span class="${o.ok ? "ok" : ""}">${o.ok ? "Modelo local listo" : "Ollama no responde"}</span><span class="${liCls}">${esc(liTxt)}</span>${verWarn}`;
   $("#models").innerHTML = o.models.map(m => `<option value="${esc(m)}">`).join("");
+  // Punto rojo en el ☰: el modelo no responde, o el permiso de LinkedIn venció o vence en menos de 7 días.
+  // (Sin permiso guardado, o con la versión de la API vieja, no hay punto: eso no es una urgencia.)
+  const liSoon = !!li.expires_at && new Date(li.expires_at) - new Date() < 7 * 864e5;
+  $("#menuBtn").classList.toggle("alert", !o.ok || liSoon);
+  syncMenuLabel();
 }
 async function loadSettings() { S.settings = await api(`${API}/settings`); }
 const perWeek = () => (S.settings.post_days || "").split(",").filter(x => x !== "").length;
@@ -667,7 +675,9 @@ $("#suggestList").addEventListener("click", act(async e => {
   if (b.dataset.a === "cancel") return setOpen(false);
   const note = answer.querySelector("textarea").value.trim();
   if (!note) throw new Error("Escribí tu respuesta primero.");
-  await api(`${API}/ideas`, { method: "POST", body: { note } });
+  // La idea se guarda como "pregunta + respuesta": sin la pregunta, una respuesta suelta pierde contexto.
+  const { question } = S.suggestions[+li.dataset.i];
+  await api(`${API}/ideas`, { method: "POST", body: { note: `${question}\n${note}` } });
   S.suggestions.splice(+li.dataset.i, 1);   // esa pregunta ya se respondió: sale de la lista
   renderSuggestions(); toast("Idea guardada."); renderIdeas();
 }));
@@ -779,10 +789,14 @@ function route() {
 window.addEventListener("hashchange", route);
 
 /* Menú lateral en pantallas chicas: un botón lo abre como cajón; se cierra con el fondo, Esc o al elegir una sección. */
+function syncMenuLabel() {   // el punto rojo es solo visual: el lector de pantalla lo recibe en el nombre del botón
+  const open = $("#side").classList.contains("open"), alert = $("#menuBtn").classList.contains("alert");
+  $("#menuBtn").setAttribute("aria-label", open ? "Cerrar menú" : alert ? "Abrir menú (hay avisos de estado)" : "Abrir menú");
+}
 function setMenu(open) {
   if ($("#side").classList.contains("open") === open) return;   // ya está así: no tocar el foco
   $("#side").classList.toggle("open", open); $("#scrim").hidden = !open;
-  $("#menuBtn").setAttribute("aria-expanded", open); $("#menuBtn").setAttribute("aria-label", open ? "Cerrar menú" : "Abrir menú");
+  $("#menuBtn").setAttribute("aria-expanded", open); syncMenuLabel();
   if (open) $("#side nav a").focus(); else if (document.activeElement?.closest("#side")) $("#menuBtn").focus();
 }
 $("#menuBtn").onclick = () => setMenu(!$("#side").classList.contains("open"));

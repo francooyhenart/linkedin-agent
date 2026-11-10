@@ -19,6 +19,28 @@ def test_el_prompt_pide_preguntas_y_prohibe_inventar_o_proponer_temas():
     assert "<note number>|<question>" in prompt
 
 
+def test_el_prompt_prohibe_suponer_lo_que_la_nota_no_dice():
+    assert "Do not assume anything the note does not say" in build_suggestions_system_prompt()
+
+
+def test_el_prompt_trae_ejemplos_buenos_y_malos_con_el_motivo_de_los_malos():
+    prompt = build_suggestions_system_prompt()
+    good = prompt.split("GOOD questions")[1].split("BAD questions")[0]
+    bad = prompt.split("BAD questions")[1]
+    assert good.count("Good:") == 3
+    bad_lines = [line for line in bad.splitlines() if line.startswith("Bad:")]
+    assert len(bad_lines) == 3
+    assert all("(" in line and line.rstrip().endswith(")") for line in bad_lines)  # cada mala dice por qué es mala
+    assert "never copy them" in prompt
+
+
+def test_los_ejemplos_del_prompt_son_de_otros_temas_que_las_notas_de_prueba():
+    # Si un ejemplo coincidiera con una nota real, el modelo podría copiarlo en vez de pensar.
+    prompt = build_suggestions_system_prompt()
+    for topic in ("Redis", "pytest", "deploy", "Postgres"):
+        assert topic not in prompt
+
+
 def test_el_prompt_de_usuario_numera_las_notas_desde_1_y_aplasta_los_saltos_de_linea():
     prompt = build_suggestions_user_prompt(["migré un cron\na Redis", "probé pytest-timeout"])
     assert prompt == "Idea bank:\n1. migré un cron a Redis\n2. probé pytest-timeout"
