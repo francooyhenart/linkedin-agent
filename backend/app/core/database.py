@@ -9,15 +9,40 @@ Piezas:
 Regla de arquitectura: solo los repository usan la sesión. Los routers y services nunca.
 """
 from collections.abc import Iterator
+from datetime import datetime
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy import DateTime, MetaData, create_engine, func, text
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from app.core.config import get_settings
+
+# Convención de nombres: SQLAlchemy/Alembic le ponen nombre a cada constraint e índice siguiendo
+# estos moldes. Sin esto, Postgres inventa nombres y Alembic no puede borrarlos en un downgrade.
+NAMING_CONVENTION = {
+    "ix": "ix_%(table_name)s_%(column_0_N_name)s",
+    "uq": "uq_%(table_name)s_%(column_0_N_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_N_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
 
 
 class Base(DeclarativeBase):
     """Todos los modelos de todos los módulos heredan de esta clase."""
+
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
+
+class TimestampMixin:
+    """Agrega created_at y updated_at (timestamptz) a cualquier tabla que lo herede.
+
+    Los valores los pone la base (now()), no Python: así son consistentes aunque inserte otro programa.
+    """
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 # pool_pre_ping: antes de usar una conexión del pool prueba que siga viva (útil si reiniciás Postgres).

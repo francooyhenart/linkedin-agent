@@ -4,19 +4,19 @@ version = "0.1.0"
 description = "Postline: planificador local de posts de LinkedIn"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.110",
-    "uvicorn>=0.29",
-    "sqlalchemy>=2.0",
-    "psycopg[binary]>=3.1",
-    "alembic>=1.13",
-    "pydantic-settings>=2.2",
-    "httpx>=0.27",
+    "fastapi>=0.110,<1",
+    "uvicorn>=0.29,<1",
+    "sqlalchemy>=2.0,<3",
+    "psycopg[binary]>=3.1,<4",
+    "alembic>=1.13,<2",
+    "pydantic-settings>=2.2,<3",
+    "httpx>=0.27,<1",
     "apscheduler>=3.10,<4",
     "tzdata",  # Windows no trae la base de zonas horarias; zoneinfo la necesita
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8,<10"]
 
 [build-system]
 requires = ["setuptools>=68"]

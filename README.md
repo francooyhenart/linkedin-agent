@@ -27,6 +27,30 @@ python app.py
 
 Abrí http://localhost:8000. Con 8 GB de RAM anda un modelo de 7–8B; si tenés poca memoria probá uno de 3B.
 
+### ¿`pyproject.toml` o `requirements.lock`?
+
+Las dos cosas viven en `backend/` y sirven para cosas distintas:
+
+- **`pyproject.toml`** dice qué necesita el proyecto, con rangos (`sqlalchemy>=2.0,<3`: cualquier 2.x). Es lo que editás cuando agregás una dependencia.
+- **`requirements.lock`** es el resultado de `pip freeze`: las versiones exactas, con todas las dependencias indirectas, con las que se probó la app. Sirve para reproducir la instalación.
+
+Para usar la app: instalá desde el lock, que es lo que se probó.
+
+```bash
+cd backend
+pip install -r requirements.lock
+pip install -e . --no-deps
+```
+
+Para desarrollar (agregar o actualizar paquetes): instalá desde el `pyproject.toml` y regenerá el lock.
+
+```bash
+pip install -e ".[dev]"
+pip freeze --exclude-editable > requirements.lock
+```
+
+El lock incluye las herramientas de desarrollo (pytest) y no es multiplataforma: se generó en Windows con Python 3.12.
+
 ## Conectar LinkedIn (opcional)
 
 Sin conectar, la app funciona igual: a la hora programada el post queda en naranja como “Publicar a mano”, tocás “Copiar y abrir LinkedIn”, pegás y listo.
