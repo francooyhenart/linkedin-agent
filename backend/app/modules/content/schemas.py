@@ -122,6 +122,52 @@ class GenerateOut(BaseModel):
     warnings: list[str]
 
 
+class PlanFailureOut(BaseModel):
+    """Una idea para la que no se pudo armar el borrador, y por qué."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    idea_id: int
+    reason: str
+
+
+class PlanOut(BaseModel):
+    """Resultado de planificar: los borradores que salieron bien y las ideas que fallaron."""
+
+    created: list[PostOut]
+    failed: list[PlanFailureOut]
+
+
+# ---------------------------------------------------------------- estado (Ollama y LinkedIn)
+class OllamaStatusOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    ok: bool
+    models: list[str]
+
+
+class LinkedInStatusOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    configured: bool
+    connected: bool
+    name: str
+    expires_at: datetime | None  # cuándo vence el permiso (se muestra en hora local con offset)
+    api_version: str  # el valor de LINKEDIN_API_VERSION
+    api_version_age_months: int
+    api_version_outdated: bool  # True si tiene más de 10 meses: hay que actualizarla pronto (vence al año)
+
+    @field_serializer("expires_at")
+    def _as_text(self, value: datetime | None) -> str:
+        # El panel hace new Date(expires_at): ISO con offset sirve. Sin fecha, texto vacío (como antes).
+        return "" if value is None else value.astimezone(get_settings().tzinfo).isoformat(timespec="minutes")
+
+
+class StatusOut(BaseModel):
+    ollama: OllamaStatusOut
+    linkedin: LinkedInStatusOut
+
+
 # ---------------------------------------------------------------- ajustes
 class SettingsUpdate(BaseModel):
     """Solo estos campos se pueden editar. Cualquier otro que llegue se ignora (extra='ignore' es el default),

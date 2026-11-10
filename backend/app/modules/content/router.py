@@ -6,9 +6,11 @@ y el handler de main.py las convierte en respuestas HTTP.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import RedirectResponse
 
-from app.modules.content.dependencies import get_content_service
+from app.modules.content.dependencies import get_content_service, get_publishing_service
 from app.modules.content.models import PostStatus
+from app.modules.content.publishing import PublishingService
 from app.modules.content.schemas import (
     GenerateIn,
     GenerateOut,
@@ -16,17 +18,33 @@ from app.modules.content.schemas import (
     IdeaOut,
     MetricsIn,
     MetricSnapshotOut,
+    PlanOut,
     PostCreate,
     PostOut,
     PostUpdate,
     SettingsOut,
     SettingsUpdate,
+    StatusOut,
 )
 from app.modules.content.service import ContentService
 
 router = APIRouter(prefix="/api/content", tags=["content"])
+# Las rutas de OAuth no llevan el prefijo /api/content: /auth/linkedin y /auth/linkedin/callback quedan igual
+# que en la app original (son las que se registran en el portal de LinkedIn como URL de redirección).
+auth_router = APIRouter(tags=["linkedin"])
 
 Service = Annotated[ContentService, Depends(get_content_service)]
+Publishing = Annotated[PublishingService, Depends(get_publishing_service)]
+
+
+# ---------------------------------------------------------------- estado
+@router.get("/status", response_model=StatusOut)
+def status(service: Service, publishing: Publishing):
+    """Estado de Ollama y de LinkedIn (incluye la antigüedad de la versión de la API de LinkedIn)."""
+    return StatusOut.model_validate(
+        {"ollama": service.get_model_status(), "linkedin": publishing.get_linkedin_status()},
+        from_attributes=True,
+    )
 
 
 # ---------------------------------------------------------------- ajustes
@@ -84,6 +102,11 @@ def delete_post(post_id: int, service: Service):
     return {"ok": True}
 
 
+@router.post("/posts/{post_id}/publish-now", response_model=PostOut)
+def publish_now(post_id: int, publishing: Publishing):
+    return PostOut.from_row(publishing.publish_post_now(post_id))
+
+
 # ---------------------------------------------------------------- métricas
 @router.put("/posts/{post_id}/metrics", response_model=PostOut)
 def put_metrics(post_id: int, body: MetricsIn, service: Service):
@@ -101,6 +124,34 @@ def generate(body: GenerateIn, service: Service):
     return service.generate(body)
 
 
-@router.post("/plan", response_model=list[PostOut])
+@router.post("/plan", response_model=PlanOut)
 def plan(service: Service):
-    return [PostOut.from_row(row) for row in service.plan_next_posts()]
+    result = service.plan_next_posts()
+    return PlanOut.model_validate(
+        {"created": [PostOut.from_row(row) for row in result.created], "failed": result.failed},
+        from_attributes=True,  # las ideas fallidas son dataclasses, no modelos de Pydantic
+    )
+
+
+# ---------------------------------------------------------------- conexión con LinkedIn
+@router.post("/linkedin/disconnect")
+def linkedin_disconnect(publishing: Publishing):
+    publishing.disconnect()
+    return {"ok": True}
+
+
+@auth_router.get("/auth/linkedin")
+def linkedin_login(publishing: Publishing):
+    return RedirectResponse(publishing.start_login())
+
+
+@auth_router.get("/auth/linkedin/callback")
+def linkedin_callback(
+    publishing: Publishing,
+    code: str = "",
+    state: str = "",
+    error: str = "",
+    error_description: str = "",
+):
+    publishing.finish_login(code, state, error, error_description)
+    return RedirectResponse("/#ajustes")

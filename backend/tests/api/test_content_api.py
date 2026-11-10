@@ -1,17 +1,26 @@
-"""Tests de la API de content contra la base de test (con el escritor falso de la fase 3)."""
+"""Tests de la API de content contra la base de test, con Ollama simulado a nivel HTTP (httpx.MockTransport)."""
+import httpx
 import pytest
-from sqlalchemy import text
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from app.main import app
+from app.modules.content.dependencies import get_post_writer
 from app.modules.content.repository import ContentRepository
+from app.modules.content.writer import OllamaPostWriter
+from tests.helpers import ollama_client, ollama_says
 
 API = "/api/content"
+OLLAMA_REPLY = "Draft from the mocked Ollama. Plain text."
 
 
 @pytest.fixture
 def client(session_factory):
-    return TestClient(app)
+    """TestClient con el cliente REAL de Ollama pero con el transporte simulado (no hace falta Ollama)."""
+    writer = OllamaPostWriter(ollama_client(ollama_says(OLLAMA_REPLY)))
+    app.dependency_overrides[get_post_writer] = lambda: writer
+    yield TestClient(app)
+    app.dependency_overrides.clear()
 
 
 def make_post(client, **overrides):
@@ -170,8 +179,26 @@ def test_put_ajustes_no_puede_escribir_tokens(client, session_factory):
 # ---------------------------------------------------------------- generación y planificación
 def test_generate_usa_el_escritor_inyectado(client):
     result = client.post(f"{API}/generate", json={"note": "una nota"}).json()
-    assert result["text"].startswith("Draft from the fake writer")
+    assert result["text"] == OLLAMA_REPLY
     assert result["warnings"] == []
+
+
+def test_generate_con_ollama_apagado_es_502_con_mensaje_claro(client):
+    def down(request):
+        raise httpx.ConnectError("refused", request=request)
+
+    app.dependency_overrides[get_post_writer] = lambda: OllamaPostWriter(ollama_client(down))
+    response = client.post(f"{API}/generate", json={"note": "una nota"})
+    assert response.status_code == 502
+    assert "No pude hablar con Ollama" in response.json()["detail"]
+
+
+def test_generate_con_modelo_inexistente_es_502_y_explica_el_pull(client):
+    handler = lambda request: httpx.Response(404, json={"error": "not found"})  # noqa: E731
+    app.dependency_overrides[get_post_writer] = lambda: OllamaPostWriter(ollama_client(handler))
+    response = client.post(f"{API}/generate", json={"note": "una nota"})
+    assert response.status_code == 502
+    assert "ollama pull llama3.1:8b" in response.json()["detail"]
 
 
 def test_generate_sin_nota_ni_borrador_es_400(client):
@@ -188,11 +215,33 @@ def test_plan_crea_borradores_en_dias_libres_y_marca_las_ideas(client):
     for note in ("uno", "dos", "tres"):
         client.post(f"{API}/ideas", json={"note": note})
 
-    posts = client.post(f"{API}/plan").json()
+    body = client.post(f"{API}/plan").json()
+    posts = body["created"]
 
+    assert body["failed"] == []
     assert len(posts) == 2  # días por defecto "1,3" = 2 por semana -> toma 2 ideas
     assert {p["status"] for p in posts} == {"draft"}
+    assert {p["text"] for p in posts} == {OLLAMA_REPLY}
     assert len({p["scheduled_at"][:10] for p in posts}) == 2  # un post por día
     assert all(p["scheduled_at"].endswith("T09:00") for p in posts)
     used = [i["used"] for i in client.get(f"{API}/ideas").json()]
     assert sorted(used) == [False, True, True]
+
+
+def test_plan_con_ollama_apagado_responde_200_con_el_motivo_por_idea(client):
+    """Contrato nuevo: {created, failed}. Si todo falla, created viene vacío y failed trae cada motivo."""
+
+    def down(request):
+        raise httpx.ConnectError("refused", request=request)
+
+    app.dependency_overrides[get_post_writer] = lambda: OllamaPostWriter(ollama_client(down))
+    ids = [client.post(f"{API}/ideas", json={"note": n}).json()["id"] for n in ("uno", "dos")]
+
+    response = client.post(f"{API}/plan")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["created"] == []
+    assert sorted(f["idea_id"] for f in body["failed"]) == sorted(ids)
+    assert all("No pude hablar con Ollama" in f["reason"] for f in body["failed"])
+    assert all(not i["used"] for i in client.get(f"{API}/ideas").json())

@@ -1,7 +1,7 @@
 """Punto de entrada: crea la app de FastAPI.
 
-Registra los routers de cada módulo y traduce las excepciones de dominio a respuestas HTTP.
-(Más adelante: montar el frontend y arrancar el scheduler.)
+Registra los routers de cada módulo, arranca el scheduler y traduce las excepciones de dominio a respuestas HTTP.
+(Más adelante: montar el frontend.)
 """
 import logging
 from contextlib import asynccontextmanager
@@ -10,10 +10,13 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
-from app.core.database import check_connection
+from app.core.database import SessionLocal, check_connection
 from app.core.exceptions import AppError, ExternalServiceError, InvalidInputError, NotFoundError
 from app.core.logging import setup_logging
+from app.integrations.linkedin.client import get_linkedin_client
+from app.modules.content.router import auth_router as linkedin_auth_router
 from app.modules.content.router import router as content_router
+from app.modules.content.scheduler import start_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +41,18 @@ async def lifespan(_app: FastAPI):
     setup_logging()
     settings = get_settings()
     logger.info("Arrancando. Zona horaria: %s", settings.timezone)
+    # SCHEDULER_ENABLED=false (o los tests) -> no se publica nada solo.
+    scheduler = start_scheduler(SessionLocal, get_linkedin_client(), settings) if settings.scheduler_enabled else None
     yield
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Postline", lifespan=lifespan)
     app.add_exception_handler(AppError, handle_app_error)
     app.include_router(content_router)
+    app.include_router(linkedin_auth_router)
 
     @app.get("/health")
     def health(response: Response) -> dict:

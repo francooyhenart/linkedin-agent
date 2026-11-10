@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     linkedin_client_id: str = ""
     linkedin_client_secret: str = ""
     linkedin_redirect_uri: str = "http://localhost:8000/auth/linkedin/callback"
+    # Versión de la API de LinkedIn (header Linkedin-Version, formato AAAAMM). LinkedIn da de baja cada versión
+    # al año de salir: hay que subirla una vez por año. El panel avisa cuando tiene más de 10 meses.
+    linkedin_api_version: str = "202610"
 
     # --- Scheduler ---
     # Si un post quedó atrasado más que esto, no se publica solo: pasa a "ready".
@@ -58,6 +61,14 @@ class Settings(BaseSettings):
             ZoneInfo(value)
         except Exception as exc:  # ZoneInfoNotFoundError, ValueError...
             raise ValueError(f"TIMEZONE inválida: '{value}'. Ejemplo: America/Argentina/Buenos_Aires") from exc
+        return value
+
+    @field_validator("linkedin_api_version")
+    @classmethod
+    def api_version_must_be_yyyymm(cls, value: str) -> str:
+        month = value[4:6]
+        if not (len(value) == 6 and value.isdigit() and "01" <= month <= "12"):
+            raise ValueError(f"LINKEDIN_API_VERSION inválida: '{value}'. Tiene que ser AAAAMM, por ejemplo 202610")
         return value
 
     @property

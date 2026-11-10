@@ -70,6 +70,12 @@ LinkedIn da el permiso por 60 días; el panel avisa cuando falta poco para renov
 - **Métricas a mano**: LinkedIn no da estadísticas de perfiles personales por API.
 - **Que suene a vos**: lo que más mejora el resultado es pegar 2 o 3 posts tuyos en Ajustes → “Posts tuyos de ejemplo”, y que las ideas tengan detalles reales (qué herramienta, cuánto tardaste, qué salió mal).
 
+## Limitaciones conocidas
+
+- **Los hashtags salen como texto, sin link.** La API de publicación de LinkedIn (`/rest/posts`) trata varios caracteres como marcado (`#`, `@`, `_`, `*`, paréntesis, corchetes, etc.), así que la app los escapa para que el post salga exactamente como lo escribiste. El efecto es que un `#devops` se ve como texto común y no es clickeable, y no se pueden hacer menciones. Además la app ya borra los hashtags al generar borradores.
+- **Un post puede quedar en “verificar en LinkedIn”.** Si LinkedIn no contesta a tiempo, se corta la conexión o responde con un error del servidor (5xx), la app no puede saber si el post salió. En ese caso lo deja en estado `publishing` y **nunca lo reintenta sola**, para no publicarlo dos veces. Mirá tu perfil en LinkedIn: si salió, marcalo como publicado; si no, reprogramalo.
+- **La versión de la API de LinkedIn vence.** `LINKEDIN_API_VERSION` (en `.env`) indica qué versión de la API se usa. LinkedIn da de baja cada versión al año; el panel avisa cuando la que usás tiene más de 10 meses. Para actualizarla, cambiá el valor por una versión vigente (formato AAAAMM) según la [documentación de LinkedIn](https://learn.microsoft.com/en-us/linkedin/marketing/versioning) y reiniciá la app.
+
 ## Estructura
 
 ```

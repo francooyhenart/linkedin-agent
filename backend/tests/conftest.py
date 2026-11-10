@@ -20,7 +20,9 @@ TEST_DB_NAME = _dev_url.database if _dev_url.database.endswith("_test") else f"{
 _test_url = _dev_url.set(database=TEST_DB_NAME)
 
 os.environ["DATABASE_URL"] = _test_url.render_as_string(hide_password=False)
-get_settings.cache_clear()  # la próxima lectura ya ve la URL de test
+# Los tests nunca arrancan el scheduler real (publicaría posts de verdad): lo prueban llamando al service directo.
+os.environ["SCHEDULER_ENABLED"] = "false"
+get_settings.cache_clear()  # la próxima lectura ya ve estos valores
 
 
 def _admin_dsn() -> str:

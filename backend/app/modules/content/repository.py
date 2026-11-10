@@ -80,7 +80,10 @@ class ContentRepository:
         return select(Post, latest).outerjoin(latest, latest.post_id == Post.id)
 
     def get_post_row(self, post_id: int) -> PostRow | None:
-        row = self.session.execute(self._posts_with_latest_metric().where(Post.id == post_id)).one_or_none()
+        # populate_existing: si esta sesión ya tenía el post cargado, lo vuelve a leer de la base en lugar de
+        # devolver la copia vieja (el scheduler y el usuario pueden haberlo cambiado entre medio).
+        stmt = self._posts_with_latest_metric().where(Post.id == post_id)
+        row = self.session.execute(stmt, execution_options={"populate_existing": True}).one_or_none()
         return PostRow(row[0], row[1]) if row else None
 
     def get_post(self, post_id: int) -> Post | None:
@@ -100,12 +103,61 @@ class ContentRepository:
             stmt = stmt.where(Post.scheduled_at < end)
         if status is not None:
             stmt = stmt.where(Post.status == status)
-        rows = self.session.execute(stmt.order_by(Post.scheduled_at, Post.id)).all()
+        stmt = stmt.order_by(Post.scheduled_at, Post.id)
+        rows = self.session.execute(stmt, execution_options={"populate_existing": True}).all()
         return [PostRow(post, metric) for post, metric in rows]
 
     def list_scheduled_times(self) -> list[datetime]:
         """scheduled_at de todos los posts (para saber qué días ya están ocupados)."""
         return list(self.session.scalars(select(Post.scheduled_at)))
+
+    def has_post_between(self, start: datetime, end: datetime) -> bool:
+        """¿Hay algún post con scheduled_at en [start, end)? Sirve para ver si un día sigue libre."""
+        stmt = select(Post.id).where(Post.scheduled_at >= start, Post.scheduled_at < end).limit(1)
+        return self.session.scalars(stmt).first() is not None
+
+    # --- Bloqueos de fila (SELECT ... FOR UPDATE) ---
+    # Un bloqueo dura hasta el commit/rollback de la transacción. Mientras una transacción tiene bloqueada una
+    # fila, ninguna otra puede bloquearla ni modificarla. Así dos procesos no pisan el mismo post o idea.
+    # populate_existing: lee los valores actuales de la base aunque la sesión tenga una copia vieja.
+
+    def lock_idea(self, idea_id: int) -> Idea | None:
+        stmt = select(Idea).where(Idea.id == idea_id).with_for_update().execution_options(populate_existing=True)
+        return self.session.scalars(stmt).first()
+
+    def lock_next_due_post(self, now: datetime) -> Post | None:
+        """El post programado más viejo cuya hora ya llegó, bloqueado. SKIP LOCKED: si otra transacción lo tiene
+        bloqueado, lo saltea en lugar de esperar (así dos scheduler nunca reclaman el mismo post)."""
+        stmt = (
+            select(Post)
+            .where(Post.status == PostStatus.APPROVED, Post.scheduled_at <= now)
+            .order_by(Post.scheduled_at, Post.id)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+            .execution_options(populate_existing=True)
+        )
+        return self.session.scalars(stmt).first()
+
+    def lock_post(self, post_id: int) -> Post | None:
+        """Bloquea un post concreto. None si no existe O si otra transacción lo tiene bloqueado (SKIP LOCKED)."""
+        stmt = (
+            select(Post)
+            .where(Post.id == post_id)
+            .with_for_update(skip_locked=True)
+            .execution_options(populate_existing=True)
+        )
+        return self.session.scalars(stmt).first()
+
+    def lock_post_with_status(self, post_id: int, status: PostStatus) -> Post | None:
+        """Bloquea el post SOLO si sigue en `status` (si no, None). Si otra transacción lo tiene bloqueado, espera.
+        Se usa para anotar el resultado de una publicación: solo si nadie más cambió el post mientras tanto."""
+        stmt = (
+            select(Post)
+            .where(Post.id == post_id, Post.status == status)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return self.session.scalars(stmt).first()
 
     def add_post(
         self,

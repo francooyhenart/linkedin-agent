@@ -7,16 +7,21 @@ Reglas de esta capa:
   no hay commit y al cerrarse la sesión todo se deshace (todo o nada).
   Por eso recibe la sesión, pero solo para eso: abrir/cerrar la transacción. Nunca consulta con ella.
 - Lo externo (el modelo de lenguaje) entra por el Protocol `PostWriter`, así se puede reemplazar por un fake.
+- NUNCA se queda con una transacción abierta mientras espera algo lento (el modelo): primero lee y hace commit
+  (cierra la transacción), después espera, y recién después abre otra para guardar.
 """
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.core.timeutil import parse_local
+from app.core.exceptions import ExternalServiceError
+from app.core.timeutil import format_local, parse_local
 from app.modules.content import prompts, slots, text_rules
 from app.modules.content.exceptions import (
     EmptyIdeaError,
@@ -27,6 +32,7 @@ from app.modules.content.exceptions import (
     NoUnusedIdeasError,
     NothingToGenerateFromError,
     PostNotFoundError,
+    ReservedStatusError,
 )
 from app.modules.content.models import Idea, PostMetric, PostStatus
 from app.modules.content.repository import ContentRepository, PostRow
@@ -38,6 +44,9 @@ from app.modules.content.schemas import (
     PostUpdate,
     SettingsUpdate,
 )
+from app.shared.llm.ollama import LLMStatus
+
+logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3  # intentos de generación si el texto no pasa los chequeos
 
@@ -50,11 +59,13 @@ DEFAULT_SETTINGS = {"post_days": "1,3", "post_time": "09:00", "max_chars": "300"
 class PostWriter(Protocol):
     """Lo que el service necesita de un "escritor": recibe los prompts y devuelve el texto crudo.
 
-    La implementación real (Ollama) llega en la fase 4. Es un Protocol: cualquier clase con un método
-    `write` con esta forma sirve, sin heredar de nada.
+    La implementación real es `OllamaPostWriter` (writer.py); los tests usan otras. Es un Protocol: cualquier
+    clase con estos métodos sirve, sin heredar de nada.
     """
 
     def write(self, system: str, user: str, model: str) -> str: ...
+
+    def status(self) -> LLMStatus: ...
 
 
 @dataclass
@@ -71,6 +82,24 @@ class UserSettings:
 class GenerationResult:
     text: str
     warnings: list[str]
+
+
+@dataclass
+class FailedIdea:
+    """Una idea para la que no se pudo armar el borrador, con el motivo."""
+
+    idea_id: int
+    reason: str
+
+
+@dataclass
+class PlanResult:
+    created: list[PostRow]
+    failed: list[FailedIdea]
+
+
+class _DraftNotSaved(Exception):
+    """Interna: un borrador no se pudo guardar. El mensaje es el motivo que ve el usuario."""
 
 
 class ContentService:
@@ -164,6 +193,8 @@ class ContentService:
             raise PostNotFoundError()
         fields = data.model_dump(exclude_none=True)
         if "status" in fields:
+            if fields["status"] == PostStatus.PUBLISHING:
+                raise ReservedStatusError()  # solo lo pone la app al reclamar un post para publicarlo
             if fields["status"] == PostStatus.PUBLISHED:
                 fields["published_at"] = self._now()
             fields["error"] = None  # cambiar de estado a mano borra el error anterior
@@ -202,15 +233,23 @@ class ContentService:
         return self.repo.list_metrics(post_id)
 
     # ------------------------------------------------------------------ generación
+    def get_model_status(self) -> LLMStatus:
+        return self.writer.status()  # es una llamada HTTP corta (3 s) y no toca la base
+
     def generate(self, data: GenerateIn) -> GenerationResult:
         if not data.note.strip() and not data.text.strip():
             raise NothingToGenerateFromError()
-        return self._generate(data.note, data.text, data.instruction)
-
-    def _generate(self, note: str, text: str = "", instruction: str = "") -> GenerationResult:
-        """Pide el texto al modelo; si no pasa los chequeos, reintenta hasta MAX_ATTEMPTS veces
-        mostrándole sus errores. Devuelve el último intento (con sus avisos si no llegó a pasar)."""
         settings = self.get_user_settings()
+        self.session.commit()  # cierra la transacción de lectura: el modelo puede tardar minutos
+        return self._generate(data.note, data.text, data.instruction, settings=settings)
+
+    def _generate(
+        self, note: str, text: str = "", instruction: str = "", *, settings: UserSettings
+    ) -> GenerationResult:
+        """Pide el texto al modelo; si no pasa los chequeos, reintenta hasta MAX_ATTEMPTS veces
+        mostrándole sus errores. Devuelve el último intento (con sus avisos si no llegó a pasar).
+
+        Recibe los ajustes ya leídos: este método NO toca la base, así que se puede llamar sin transacción abierta."""
         system = prompts.build_system_prompt(settings.max_chars, settings.style_examples)
         user = prompts.build_user_prompt(note, text, instruction)
 
@@ -224,12 +263,19 @@ class ContentService:
         return GenerationResult(text=out, warnings=warnings)
 
     # ------------------------------------------------------------------ planificación
-    def plan_next_posts(self) -> list[PostRow]:
+    def plan_next_posts(self) -> PlanResult:
         """Toma las ideas sin usar (tantas como días de publicación por semana) y arma un borrador
-        por cada una en los próximos días libres.
+        por cada una en los próximos días libres. En tres fases, para no dejar una transacción abierta
+        mientras se espera al modelo:
 
-        Primero se genera todo el texto y recién después se guarda: si el modelo falla a mitad de camino
-        no queda nada a medias (un solo commit al final)."""
+        A) LEER: ajustes, ideas y días ocupados. Se hace commit y la transacción queda cerrada.
+        B) GENERAR: el modelo escribe cada borrador (lento). No hay transacción abierta ni se toca la base.
+        C) GUARDAR: cada borrador en SU PROPIA transacción, revalidando antes (pasó tiempo: la idea pudo
+           borrarse o usarse, el día pudo ocuparse). Cada post se guarda completo o no se guarda.
+
+        Lo que salió bien se guarda; lo que falló vuelve en `failed` con el motivo, y esa idea queda sin usar.
+        """
+        # --- A) leer
         settings = self.get_user_settings()
         days = slots.parse_post_days(settings.post_days)
         if not days:
@@ -237,7 +283,6 @@ class ContentService:
         ideas = self.repo.list_unused_ideas(limit=len(days))
         if not ideas:
             raise NoUnusedIdeasError()
-
         taken = {when.astimezone(self.tz).date() for when in self.repo.list_scheduled_times()}
         free = slots.next_slots(
             count=len(ideas),
@@ -246,20 +291,57 @@ class ContentService:
             taken_dates=taken,
             now=self._now(),
         )
-        pairs = list(zip(ideas, free))  # si faltan días libres, solo se usan las ideas que alcanzan
-        drafts = [(idea, when, self._generate(idea.note).text) for idea, when in pairs]
-
-        created = []
-        for idea, when, text in drafts:
-            post = self.repo.add_post(text.strip(), when, PostStatus.DRAFT, idea.id)
-            self.repo.mark_idea_used(idea)
-            created.append(post.id)
+        # Valores simples (no objetos de la base): después del commit ya no los vamos a consultar.
+        work = [(idea.id, idea.note, when) for idea, when in zip(ideas, free)]  # si faltan días, alcanzan menos ideas
         self.session.commit()
-        return [self.get_post(post_id) for post_id in created]
+
+        # --- B) generar (sin transacción abierta)
+        drafts: list[tuple[int, datetime, str]] = []
+        failed: list[FailedIdea] = []
+        for idea_id, note, when in work:
+            try:
+                drafts.append((idea_id, when, self._generate(note, settings=settings).text))
+            except ExternalServiceError as exc:
+                logger.warning("No se pudo escribir el borrador de la idea %s: %s", idea_id, exc.message)
+                failed.append(FailedIdea(idea_id, exc.message))
+
+        # --- C) guardar, uno por uno
+        created_ids: list[int] = []
+        for idea_id, when, text in drafts:
+            try:
+                created_ids.append(self._save_draft(idea_id, when, text))
+            except _DraftNotSaved as exc:
+                failed.append(FailedIdea(idea_id, str(exc)))
+        return PlanResult(created=[self.get_post(post_id) for post_id in created_ids], failed=failed)
+
+    def _save_draft(self, idea_id: int, when: datetime, text: str) -> int:
+        """Guarda UN borrador en su propia transacción, revalidando todo. Devuelve el id del post."""
+        try:
+            idea = self.repo.lock_idea(idea_id)  # la bloquea: nadie más la puede usar hasta el commit
+            if idea is None:
+                raise _DraftNotSaved("La idea se borró mientras se escribía el borrador.")
+            if idea.used:
+                raise _DraftNotSaved("La idea ya se usó mientras se escribía el borrador.")
+            day_start = datetime.combine(when.date(), time.min, tzinfo=self.tz)
+            if self.repo.has_post_between(day_start, day_start + timedelta(days=1)):
+                raise _DraftNotSaved(f"El {format_local(when, self.tz)[:10]} se ocupó mientras se escribía el borrador.")
+            post = self.repo.add_post(text.strip(), when, PostStatus.DRAFT, idea_id)
+            self.repo.mark_idea_used(idea)
+            self.session.commit()
+            return post.id
+        except _DraftNotSaved:
+            self.session.rollback()
+            raise
+        except SQLAlchemyError:
+            self.session.rollback()
+            logger.exception("Falló el guardado del borrador de la idea %s", idea_id)
+            raise _DraftNotSaved("No se pudo guardar el borrador (error de base de datos).") from None
 
     # ------------------------------------------------------------------ internos
     def _add_post(self, data: PostCreate):
         """Crea el post y marca la idea como usada. No hace commit: lo hace quien lo llama."""
+        if data.status == PostStatus.PUBLISHING:
+            raise ReservedStatusError()
         if data.idea_id is not None:
             idea = self.repo.get_idea(data.idea_id)
             if idea is None:

@@ -35,3 +35,39 @@ class NoPublishDaysError(InvalidInputError):
 
 class InvalidSettingError(InvalidInputError):
     default_message = "Ajuste inválido."
+
+
+class ReservedStatusError(InvalidInputError):
+    default_message = "El estado «publishing» lo maneja la app y no se puede elegir a mano."
+
+
+# ---- publicación y conexión con LinkedIn
+class EmptyPostError(InvalidInputError):
+    default_message = "El post está vacío."
+
+
+class PostAlreadyPublishedError(InvalidInputError):
+    default_message = "Ese post ya está publicado."
+
+
+class PostBeingPublishedError(InvalidInputError):
+    default_message = (
+        "Este post ya se está publicando o quedó sin confirmar. "
+        "Verificá en LinkedIn si salió antes de volver a intentarlo."
+    )
+
+
+class LinkedInNotConnectedError(InvalidInputError):
+    default_message = "Conectá LinkedIn en Ajustes para publicar desde acá."
+
+
+class LinkedInNotConfiguredError(InvalidInputError):
+    default_message = "Falta LINKEDIN_CLIENT_ID / LINKEDIN_CLIENT_SECRET en el archivo .env"
+
+
+class InvalidOAuthStateError(InvalidInputError):
+    default_message = "Estado OAuth inválido. Volvé a intentar desde Ajustes."
+
+
+class LinkedInAuthorizationDeniedError(InvalidInputError):
+    default_message = "LinkedIn rechazó la conexión."
