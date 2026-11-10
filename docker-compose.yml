@@ -1,0 +1,23 @@
+# Solo Postgres. La app de Python corre en tu máquina, fuera de Docker.
+services:
+  db:
+    image: postgres:16
+    container_name: linkedin-agent-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-linkedin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-linkedin}
+      POSTGRES_DB: ${POSTGRES_DB:-linkedin_agent}
+    ports:
+      # 127.0.0.1: la base solo es accesible desde tu máquina, no desde la red.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # volumen persistente: los datos sobreviven a `docker compose down`
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-linkedin} -d $${POSTGRES_DB:-linkedin_agent}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
