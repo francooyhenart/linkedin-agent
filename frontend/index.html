@@ -263,6 +263,9 @@ ol.help{padding-left:1.1rem}
       <div id="edNotice"></div>
       <details id="edNoteBox">
         <summary>Escribir desde una nota</summary>
+        <label class="f" id="edIdeaBox" style="margin-bottom:.6rem">Partir de una idea
+          <select id="edIdea"><option value="">Ninguna</option></select>
+        </label>
         <label class="f">Qué querés contar
           <textarea id="edNote" rows="3" placeholder="La idea en crudo, en castellano está bien"></textarea>
         </label>
@@ -426,6 +429,8 @@ function openEditor(p) {
   $("#edTitle").textContent = p.id ? "Editar post" : "Nuevo post";
   $("#edNote").value = p.note || "";
   $("#edNoteBox").open = !p.id;
+  $("#edIdeaBox").hidden = !!p.id;   // vincular una idea solo tiene sentido al crear el post
+  if (!p.id) loadIdeaChoices(cur);
   $("#edText").value = p.text || "";
   $("#edWhen").value = p.scheduled_at || nextSlot();
   $("#edStatus").value = p.status || "draft";
@@ -445,6 +450,28 @@ function openEditor(p) {
   $("#ed").showModal();
   (p.id ? $("#edText") : $("#edNote")).focus();
 }
+/* "Partir de una idea": las sin usar primero, las usadas al final y marcadas. */
+async function loadIdeaChoices(forPost) {
+  const sel = $("#edIdea");
+  sel.innerHTML = `<option value="">Ninguna</option>`;
+  try {
+    const ideas = await api(`${API}/ideas`);
+    if (cur !== forPost) return;   // mientras tanto se cerró o se abrió otro editor
+    S.ideas = Object.fromEntries(ideas.map(i => [i.id, i]));
+    const short = n => n.length > 70 ? n.slice(0, 70) + "…" : n;
+    const option = i => `<option value="${i.id}">${esc(short(i.note.replace(/\s+/g, " ")))}${i.used ? " (usada)" : ""}</option>`;
+    sel.innerHTML += [...ideas.filter(i => !i.used), ...ideas.filter(i => i.used)].map(option).join("");
+    sel.value = forPost.idea_id != null ? String(forPost.idea_id) : "";
+  } catch (e) { toast(e.message); }
+}
+$("#edIdea").addEventListener("change", () => {
+  const id = $("#edIdea").value;
+  cur.idea_id = id ? +id : null;
+  if (id) $("#edNote").value = S.ideas[id].note;
+});
+$("#edNote").addEventListener("input", () => {   // sin nota no hay idea: se quita el vínculo
+  if (!$("#edNote").value.trim()) { cur.idea_id = null; $("#edIdea").value = ""; }
+});
 function checkText(t) {
   const w = [], max = +S.settings.max_chars || 300, low = t.toLowerCase();
   if (t.length > max) w.push(`Se pasa por ${t.length - max} caracteres.`);
