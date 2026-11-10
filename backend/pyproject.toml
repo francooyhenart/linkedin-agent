@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10"]
+dev = ["pytest>=8,<10", "pytest-timeout>=2.3,<3"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -27,3 +27,7 @@ include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Ningún test debería tardar más de esto. Si uno se cuelga (por ejemplo, esperando un bloqueo de Postgres),
+# falla con un traceback en lugar de dejar la corrida trabada para siempre.
+timeout = 60
+timeout_method = "thread"

@@ -19,6 +19,9 @@ _dev_url = make_url(get_settings().database_url)
 TEST_DB_NAME = _dev_url.database if _dev_url.database.endswith("_test") else f"{_dev_url.database}_test"
 _test_url = _dev_url.set(database=TEST_DB_NAME)
 
+# lock_timeout: si una consulta espera un bloqueo de fila más de 5 segundos, Postgres la cancela con un error.
+# Sin esto, un bloqueo que nunca se libera deja el test colgado para siempre. (Además hay un timeout por test.)
+_test_url = _test_url.update_query_dict({"options": "-c lock_timeout=5000"})
 os.environ["DATABASE_URL"] = _test_url.render_as_string(hide_password=False)
 # Los tests nunca arrancan el scheduler real (publicaría posts de verdad): lo prueban llamando al service directo.
 os.environ["SCHEDULER_ENABLED"] = "false"

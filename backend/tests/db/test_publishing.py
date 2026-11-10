@@ -196,8 +196,15 @@ def connection_reset(request):
 
 @pytest.mark.parametrize(
     "respond",
-    [read_timeout, connection_reset, lambda request: httpx.Response(500), lambda request: httpx.Response(503)],
-    ids=["timeout", "conexion-cortada", "http-500", "http-503"],
+    [
+        read_timeout,
+        connection_reset,
+        lambda request: httpx.Response(500),
+        lambda request: httpx.Response(503),
+        lambda request: httpx.Response(408, json={"message": "timeout"}),
+        lambda request: httpx.Response(409, json={"message": "write conflict, retry"}),
+    ],
+    ids=["timeout", "conexion-cortada", "http-500", "http-503", "http-408", "http-409"],
 )
 def test_resultado_desconocido_deja_el_post_en_publishing_y_nunca_se_reintenta(session_factory, respond):
     connect_linkedin(session_factory)
@@ -216,6 +223,55 @@ def test_resultado_desconocido_deja_el_post_en_publishing_y_nunca_se_reintenta(s
         tick(session_factory, calls)
     assert calls.count == 1
     assert state_of(session_factory, post_id)[0] == PostStatus.PUBLISHING
+
+
+def test_429_deja_el_post_en_failed_y_se_puede_reintentar(session_factory):
+    connect_linkedin(session_factory)
+    post_id = add_post(session_factory)
+    tick(session_factory, LinkedInCalls(lambda request: httpx.Response(429, json={})))
+
+    status, error, _ = state_of(session_factory, post_id)
+    assert status == PostStatus.FAILED and "demasiados pedidos" in error
+
+    # failed sí se puede reintentar a mano (no hay duda de que no salió)
+    row = manual(session_factory, LinkedInCalls(), post_id)
+    assert row.post.status == PostStatus.PUBLISHED
+
+
+@pytest.mark.parametrize("urn", ["urn:li:share:7000000000000000001", "urn:li:ugcPost:7000000000000000002"])
+def test_si_linkedin_dice_que_el_contenido_ya_existia_se_marca_published_con_ese_urn(session_factory, urn):
+    """El escenario: un intento anterior sí publicó pero no pudimos confirmarlo. Al reintentar a mano (o si el post
+    se repite), LinkedIn contesta 'duplicado de <urn>': el post ya estaba publicado, se marca published con ese URN."""
+    connect_linkedin(session_factory)
+    post_id = add_post(session_factory)
+    calls = LinkedInCalls(lambda request: httpx.Response(422, json={"message": f"Content is a duplicate of {urn}"}))
+
+    tick(session_factory, calls)
+
+    status, error, url = state_of(session_factory, post_id)
+    assert (status, error) == (PostStatus.PUBLISHED, None)
+    assert url == f"https://www.linkedin.com/feed/update/{urn}/"
+    assert calls.count == 1
+    tick(session_factory, calls)  # y no se vuelve a llamar
+    assert calls.count == 1
+
+
+def test_duplicado_tambien_funciona_con_publicar_ahora(session_factory):
+    connect_linkedin(session_factory)
+    post_id = add_post(session_factory, status=PostStatus.DRAFT)
+    urn = "urn:li:share:42"
+    calls = LinkedInCalls(lambda request: httpx.Response(422, json={"message": f"Content is a duplicate of {urn}"}))
+
+    row = manual(session_factory, calls, post_id)
+
+    assert row.post.status == PostStatus.PUBLISHED and row.post.linkedin_url.endswith(f"{urn}/")
+
+
+def test_un_422_comun_si_deja_el_post_en_failed(session_factory):
+    connect_linkedin(session_factory)
+    post_id = add_post(session_factory)
+    tick(session_factory, LinkedInCalls(lambda request: httpx.Response(422, json={"message": "Error validating the post"})))
+    assert state_of(session_factory, post_id)[0] == PostStatus.FAILED
 
 
 def test_el_timeout_simulado_no_pasa_a_failed_aunque_el_cliente_lance_la_excepcion_de_desconocido(session_factory):

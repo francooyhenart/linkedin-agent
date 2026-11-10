@@ -40,6 +40,11 @@ READ_TIMEOUT = 30.0
 # Códigos con los que LinkedIn avisa que la versión del header no sirve.
 VERSION_ERROR_CODES = {"VERSION_MISSING", "NONEXISTENT_VERSION"}
 
+# LinkedIn rechaza con 422 un post idéntico a uno creado hace poco (unos 10 minutos) y en el mensaje da el URN del
+# original: "Content is a duplicate of urn:li:share:123". Está documentado en la página legacy de ugcPosts; la del
+# Posts API no lo menciona, pero hay reportes de que el mensaje es el mismo. Solo se usa si trae el URN.
+DUPLICATE_RE = re.compile(r"duplicate of (urn:li:(?:share|ugcPost):\d+)", re.IGNORECASE)
+
 # Caracteres reservados del formato "little" que usa el campo `commentary`. Hay que escaparlos con \ aunque se
 # quiera escribir texto común: https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/little-text-format
 LITTLE_RESERVED = re.compile(r"([\\|{}@\[\]()<>#*_~])")
@@ -75,6 +80,8 @@ class Profile:
 class PublishResult:
     post_urn: str | None
     url: str | None
+    # True si LinkedIn no creó un post nuevo porque YA existía uno idéntico (ver DUPLICATE_RE): post_urn es el del original.
+    was_duplicate: bool = False
 
 
 class LinkedInClient:
@@ -164,10 +171,13 @@ class LinkedInClient:
     def publish_text(self, access_token: str, person_id: str, text: str) -> PublishResult:
         """Publica un post de solo texto. Qué se lanza si algo sale mal importa mucho:
 
-        - LinkedInRejectedError:       respuesta 4xx -> NO se publicó.
-        - LinkedInOutcomeUnknownError: timeout, error de conexión, 5xx o respuesta rara -> NO SABEMOS.
+        - LinkedInRejectedError:       respuesta 4xx -> NO se publicó (429, 401, 403, 422 comunes...).
+        - LinkedInOutcomeUnknownError: timeout, error de conexión, 5xx, 408, 409 o respuesta rara -> NO SABEMOS.
+          (408 es "timeout" y 409 es "conflicto de escritura, reintentá": en ambos LinkedIn pudo haber creado el post.)
         - Si LinkedIn contesta 2xx, el post ya existe: este método NUNCA lanza después de eso
           (si faltara el id del post, devuelve url=None en lugar de un error).
+        - 422 "Content is a duplicate of urn:li:share:N": el post ya estaba publicado. Se devuelve como éxito
+          con el URN del original (was_duplicate=True).
         """
         try:
             response = self._http.post(
@@ -206,9 +216,17 @@ class LinkedInClient:
             urn = response.headers.get("x-restli-id")
             logger.info("LinkedIn aceptó el post (HTTP %s)", status)
             return PublishResult(post_urn=urn, url=f"https://www.linkedin.com/feed/update/{urn}/" if urn else None)
-        if 400 <= status < 500:
+        if status == 422:
+            duplicate = DUPLICATE_RE.search(response.text)
+            if duplicate:
+                urn = duplicate.group(1)
+                logger.info("LinkedIn dice que el post ya existía (%s): se marca como publicado", urn)
+                return PublishResult(
+                    post_urn=urn, url=f"https://www.linkedin.com/feed/update/{urn}/", was_duplicate=True
+                )
+        if 400 <= status < 500 and status not in (408, 409):
             raise LinkedInRejectedError(self._rejection_message(response))
-        # 5xx, y cualquier otra cosa inesperada (1xx, 3xx): no sabemos si llegó a publicarse.
+        # 5xx, 408, 409 y cualquier otra cosa inesperada (1xx, 3xx): no sabemos si llegó a publicarse.
         raise LinkedInOutcomeUnknownError(
             f"LinkedIn respondió {status}. No sé si el post se publicó: "
             "verificá en LinkedIn antes de volver a intentarlo."

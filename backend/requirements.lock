@@ -24,6 +24,7 @@ pydantic-settings==2.16.2
 pydantic_core==2.50.4
 Pygments==2.21.0
 pytest==9.2.0
+pytest-timeout==2.4.0
 python-dotenv==1.2.4
 SQLAlchemy==2.1.8
 starlette==1.10.0

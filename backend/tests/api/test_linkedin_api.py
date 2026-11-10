@@ -288,6 +288,63 @@ def test_no_se_puede_crear_ni_pasar_a_mano_un_post_a_publishing(env):
     assert patched.status_code == 400
 
 
+def post_in_publishing(session_factory) -> int:
+    """Un post que quedó en 'publishing' (la app no pudo confirmar si salió), con el aviso que deja la app."""
+    from datetime import datetime, timezone
+
+    from app.modules.content.models import PostStatus
+    from app.modules.content.publishing import PUBLISHING_NOTE
+
+    with session_factory() as s:
+        post = ContentRepository(s).add_post("Un post", datetime(2026, 11, 12, 12, 0, tzinfo=timezone.utc), PostStatus.PUBLISHING, None)
+        post.error = PUBLISHING_NOTE
+        s.commit()
+        return post.id
+
+
+def test_un_patch_con_el_mismo_estado_no_cambia_nada(env, session_factory):
+    """Idempotente: mandar status=publishing a un post que ya está en publishing no da error ni borra el aviso."""
+    post_id = post_in_publishing(session_factory)
+
+    response = env.http.patch(f"{API}/posts/{post_id}", json={"status": "publishing", "text": "texto corregido"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "publishing" and body["text"] == "texto corregido"
+    assert "verificá en LinkedIn" in body["error"]  # el aviso sigue ahí
+
+
+def test_un_patch_sin_estado_en_un_post_publishing_tampoco_lo_toca(env, session_factory):
+    post_id = post_in_publishing(session_factory)
+    body = env.http.patch(f"{API}/posts/{post_id}", json={"scheduled_at": "2026-11-13T10:00"}).json()
+    assert body["status"] == "publishing" and body["scheduled_at"] == "2026-11-13T10:00" and body["error"]
+
+
+def test_si_salio_marca_published_con_link_opcional_y_borra_el_aviso(env, session_factory):
+    con_link, sin_link = post_in_publishing(session_factory), post_in_publishing(session_factory)
+
+    a = env.http.patch(
+        f"{API}/posts/{con_link}",
+        json={"status": "published", "linkedin_url": "https://www.linkedin.com/feed/update/urn:li:share:9/"},
+    ).json()
+    b = env.http.patch(f"{API}/posts/{sin_link}", json={"status": "published"}).json()
+
+    assert (a["status"], a["error"], a["linkedin_url"]) == ("published", None, "https://www.linkedin.com/feed/update/urn:li:share:9/")
+    assert (b["status"], b["error"], b["linkedin_url"]) == ("published", None, None)
+    assert a["published_at"] and b["published_at"]
+
+
+def test_no_salio_vuelve_a_ready_y_se_puede_publicar_a_mano_de_nuevo(env, session_factory):
+    env.login()
+    post_id = post_in_publishing(session_factory)
+
+    ready = env.http.patch(f"{API}/posts/{post_id}", json={"status": "ready"}).json()
+    assert ready["status"] == "ready" and ready["error"] is None
+
+    # ahora sí se puede reintentar (el usuario confirmó que no salió)
+    assert env.http.post(f"{API}/posts/{post_id}/publish-now").json()["status"] == "published"
+
+
 def test_el_usuario_resuelve_verificar_en_linkedin_marcandolo_como_publicado(session_factory):
     calls = LinkedInCalls(lambda request: (_ for _ in ()).throw(httpx.ReadTimeout("t", request=request)))
 

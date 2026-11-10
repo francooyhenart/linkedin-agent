@@ -192,9 +192,12 @@ class ContentService:
         if post is None:
             raise PostNotFoundError()
         fields = data.model_dump(exclude_none=True)
+        if fields.get("status") == post.status:
+            # Mandar el estado que el post YA tiene no cambia nada (idempotente): ni el aviso de error ni la fecha.
+            del fields["status"]
         if "status" in fields:
             if fields["status"] == PostStatus.PUBLISHING:
-                raise ReservedStatusError()  # solo lo pone la app al reclamar un post para publicarlo
+                raise ReservedStatusError()  # pasar A 'publishing' solo lo hace la app al reclamar un post
             if fields["status"] == PostStatus.PUBLISHED:
                 fields["published_at"] = self._now()
             fields["error"] = None  # cambiar de estado a mano borra el error anterior

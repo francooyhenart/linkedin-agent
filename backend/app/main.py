@@ -7,9 +7,9 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
-from app.core.config import get_settings
+from app.core.config import PROJECT_ROOT, get_settings
 from app.core.database import SessionLocal, check_connection
 from app.core.exceptions import AppError, ExternalServiceError, InvalidInputError, NotFoundError
 from app.core.logging import setup_logging
@@ -19,6 +19,8 @@ from app.modules.content.router import router as content_router
 from app.modules.content.scheduler import start_scheduler
 
 logger = logging.getLogger(__name__)
+
+FRONTEND_DIR = PROJECT_ROOT / "frontend"
 
 # Único lugar donde se decide qué código HTTP corresponde a cada tipo de error de dominio.
 # Se prueba en orden con isinstance, así las excepciones de cada módulo (que heredan de estas) funcionan solas.
@@ -53,6 +55,11 @@ def create_app() -> FastAPI:
     app.add_exception_handler(AppError, handle_app_error)
     app.include_router(content_router)
     app.include_router(linkedin_auth_router)
+
+    @app.get("/", include_in_schema=False)
+    def index() -> FileResponse:
+        """El panel: un solo HTML que habla con la API de /api/content/..."""
+        return FileResponse(FRONTEND_DIR / "index.html")
 
     @app.get("/health")
     def health(response: Response) -> dict:

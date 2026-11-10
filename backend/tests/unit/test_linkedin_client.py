@@ -132,10 +132,60 @@ def test_un_400_comun_no_se_confunde_con_el_de_version():
     assert "400" in error.value.message
 
 
-def test_429_dice_que_es_el_limite():
+def test_429_dice_que_es_el_limite_y_es_rechazo_definitivo():
     client = linkedin_client(lambda request: httpx.Response(429, text="slow down"))
     with pytest.raises(LinkedInRejectedError, match="demasiados pedidos"):
         publish(client)
+
+
+# ---------------------------------------------------------------- 408 y 409: son 4xx pero NO sabemos qué pasó
+@pytest.mark.parametrize("status", [408, 409])
+def test_408_y_409_son_resultado_desconocido_aunque_sean_4xx(status):
+    """408 es 'timeout' y 409 es 'conflicto de escritura, reintentá': LinkedIn pudo haber creado el post."""
+    client = linkedin_client(lambda request: httpx.Response(status, json={"message": "retry"}))
+    with pytest.raises(LinkedInOutcomeUnknownError, match=f"respondió {status}.*verificá en LinkedIn") as error:
+        publish(client)
+    assert not isinstance(error.value, LinkedInRejectedError)
+
+
+def test_los_demas_4xx_siguen_siendo_rechazo_definitivo():
+    for status in (400, 401, 403, 404, 410, 413, 422, 429):
+        client = linkedin_client(lambda request, s=status: httpx.Response(s, json={"message": "x"}))
+        with pytest.raises(LinkedInRejectedError):
+            publish(client)
+
+
+# ---------------------------------------------------------------- contenido duplicado: "ya estaba publicado"
+@pytest.mark.parametrize("urn", ["urn:li:share:7000000000000000001", "urn:li:ugcPost:7000000000000000002"])
+def test_422_de_contenido_duplicado_se_trata_como_ya_publicado_con_el_urn_del_original(urn):
+    body = {"status": 422, "message": f"Content is a duplicate of {urn}"}
+    client = linkedin_client(lambda request: httpx.Response(422, json=body))
+
+    result = publish(client)
+
+    assert result.was_duplicate is True
+    assert result.post_urn == urn
+    assert result.url == f"https://www.linkedin.com/feed/update/{urn}/"
+
+
+def test_un_post_nuevo_no_es_duplicado():
+    result = publish(linkedin_client(LinkedInCalls()))
+    assert result.was_duplicate is False
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(422, json={"message": "Error validating the post: commentary is required"}),
+        httpx.Response(422, json={"message": "Content is a duplicate"}),  # sin URN: no se puede confirmar
+        httpx.Response(422, text="duplicate of something"),
+        httpx.Response(400, json={"message": "Do not post duplicate content"}),  # formato viejo, sin URN
+        httpx.Response(429, json={"message": "Content is a duplicate of urn:li:share:1"}),  # otro código: no cuenta
+    ],
+)
+def test_un_rechazo_que_no_trae_el_urn_del_original_sigue_siendo_failed(response):
+    with pytest.raises(LinkedInRejectedError):
+        publish(linkedin_client(lambda request: response))
 
 
 # ---------------------------------------------------------------- timeout / conexión / 5xx: NO SABEMOS
