@@ -1,18 +1,35 @@
 """Punto de entrada: crea la app de FastAPI.
 
-En esta fase solo tiene GET /health. A medida que avancemos acá se van a:
-registrar los routers de cada módulo, montar el frontend y arrancar el scheduler.
+Registra los routers de cada módulo y traduce las excepciones de dominio a respuestas HTTP.
+(Más adelante: montar el frontend y arrancar el scheduler.)
 """
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
 from app.core.database import check_connection
+from app.core.exceptions import AppError, ExternalServiceError, InvalidInputError, NotFoundError
 from app.core.logging import setup_logging
+from app.modules.content.router import router as content_router
 
 logger = logging.getLogger(__name__)
+
+# Único lugar donde se decide qué código HTTP corresponde a cada tipo de error de dominio.
+# Se prueba en orden con isinstance, así las excepciones de cada módulo (que heredan de estas) funcionan solas.
+HTTP_STATUS_BY_ERROR = [
+    (NotFoundError, 404),
+    (InvalidInputError, 400),
+    (ExternalServiceError, 502),
+]
+
+
+async def handle_app_error(_request: Request, exc: AppError) -> JSONResponse:
+    status = next((code for cls, code in HTTP_STATUS_BY_ERROR if isinstance(exc, cls)), 500)
+    # {"detail": ...} es el mismo formato que usaba la app original: el panel ya sabe leerlo.
+    return JSONResponse(status_code=status, content={"detail": exc.message})
 
 
 @asynccontextmanager
@@ -26,6 +43,8 @@ async def lifespan(_app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Postline", lifespan=lifespan)
+    app.add_exception_handler(AppError, handle_app_error)
+    app.include_router(content_router)
 
     @app.get("/health")
     def health(response: Response) -> dict:

@@ -1,1 +1,145 @@
-"""Schemas Pydantic de content: forma de lo que entra y sale por la API. (Fase 3)"""
+"""Schemas Pydantic de content: la forma de lo que entra y sale por la API.
+
+Los schemas NO tocan la base ni tienen reglas de negocio; solo validan formato y definen el JSON.
+Las fechas viajan como texto en hora local ("2026-11-10T09:00") para que el panel no necesite cambios;
+en la base se guardan como timestamptz.
+"""
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
+
+from app.core.config import get_settings
+from app.core.timeutil import format_local
+from app.modules.content.models import PostStatus
+
+if TYPE_CHECKING:  # solo para anotar tipos: el schema no depende del repository en tiempo de ejecución
+    from app.modules.content.repository import PostRow
+
+
+# ---------------------------------------------------------------- ideas
+class IdeaCreate(BaseModel):
+    note: str
+
+
+class IdeaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    note: str
+    used: bool
+    created_at: datetime
+
+
+# ---------------------------------------------------------------- posts
+class PostCreate(BaseModel):
+    text: str = ""
+    scheduled_at: str  # "AAAA-MM-DDTHH:MM", hora local. Se interpreta en el service.
+    status: PostStatus = PostStatus.DRAFT
+    idea_id: int | None = None
+
+
+class PostUpdate(BaseModel):
+    text: str | None = None
+    scheduled_at: str | None = None
+    status: PostStatus | None = None
+    linkedin_url: str | None = None
+
+
+class PostOut(BaseModel):
+    id: int
+    idea_id: int | None
+    text: str
+    scheduled_at: datetime
+    status: PostStatus
+    linkedin_url: str | None
+    published_at: datetime | None
+    error: str | None
+    # Último snapshot de métricas (0 si nunca se cargaron), aplanado como lo espera el panel.
+    impressions: int
+    reactions: int
+    comments: int
+    reposts: int
+    metrics_captured_at: datetime | None
+
+    @field_serializer("scheduled_at", "published_at", "metrics_captured_at")
+    def _as_local_text(self, value: datetime | None) -> str | None:
+        return None if value is None else format_local(value, get_settings().tzinfo)
+
+    @classmethod
+    def from_row(cls, row: "PostRow") -> "PostOut":
+        post, metric = row.post, row.latest_metric
+        return cls(
+            id=post.id,
+            idea_id=post.idea_id,
+            text=post.text,
+            scheduled_at=post.scheduled_at,
+            status=post.status,
+            linkedin_url=post.linkedin_url,
+            published_at=post.published_at,
+            error=post.error,
+            impressions=metric.impressions if metric else 0,
+            reactions=metric.reactions if metric else 0,
+            comments=metric.comments if metric else 0,
+            reposts=metric.reposts if metric else 0,
+            metrics_captured_at=metric.captured_at if metric else None,
+        )
+
+
+# ---------------------------------------------------------------- métricas
+class MetricsIn(BaseModel):
+    impressions: int = Field(0, ge=0)
+    reactions: int = Field(0, ge=0)
+    comments: int = Field(0, ge=0)
+    reposts: int = Field(0, ge=0)
+
+
+class MetricSnapshotOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    captured_at: datetime
+    impressions: int
+    reactions: int
+    comments: int
+    reposts: int
+
+    @field_serializer("captured_at")
+    def _as_local_text(self, value: datetime) -> str:
+        return format_local(value, get_settings().tzinfo)
+
+
+# ---------------------------------------------------------------- generación
+class GenerateIn(BaseModel):
+    note: str = ""
+    text: str = ""
+    instruction: str = ""
+
+
+class GenerateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    text: str
+    warnings: list[str]
+
+
+# ---------------------------------------------------------------- ajustes
+class SettingsUpdate(BaseModel):
+    """Solo estos campos se pueden editar. Cualquier otro que llegue se ignora (extra='ignore' es el default),
+    así que por esta vía es imposible tocar los tokens de LinkedIn."""
+
+    post_days: str | None = None
+    post_time: str | None = None
+    max_chars: int | None = None
+    model: str | None = None
+    style_examples: str | None = None
+
+
+class SettingsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
+
+    post_days: str
+    post_time: str
+    max_chars: int
+    model: str
+    style_examples: str
+    banned: list[str]
