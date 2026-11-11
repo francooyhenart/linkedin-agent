@@ -178,6 +178,10 @@ Cuando el scheduler deja un post en **Publicar a mano** muestra una notificació
 (si caen varios en el mismo minuto, una sola: "3 posts para publicar a mano"). Funciona aunque el navegador esté
 cerrado, mientras la app esté corriendo. Se apaga en *Ajustes → Avisarme cuando un post quede para publicar a mano*.
 
+![Notificación de Windows](docs/images/aviso-windows.png)
+
+*Captura real. El texto de prueba tiene comillas, `$(...)` y backticks a propósito: se muestra tal cual y no se ejecuta nada.*
+
 - **Windows**: probado. Aparece como "Windows PowerShell" y al tocarla abre el panel. Si tenés activado "No molestar" o el
   Asistente de concentración, no se ve el cartel pero queda en el Centro de notificaciones.
 - **macOS** y **Linux**: no probado. En macOS usa `osascript` (puede pedirte permiso en *Ajustes del Sistema → Notificaciones*);
@@ -311,7 +315,7 @@ en tu `.env` y reiniciá.
 ```bash
 cd backend
 pip install -e ".[dev]"
-pytest                 # necesita la base levantada; usa una base aparte "<nombre>_test"
+pytest                 # necesita la base levantada; usa una base aparte "<nombre>_test"; tarda de 1 a 3 minutos
 alembic check          # compara los modelos con la base (tiene que decir "No new upgrade operations detected")
 ```
 
