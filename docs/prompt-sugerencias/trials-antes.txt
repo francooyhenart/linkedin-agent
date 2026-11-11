@@ -1,0 +1,39 @@
+##### ANTES
+Ideas:
+  1. Tuve un deploy que falló un viernes por una variable de entorno que faltaba en producción
+  2. Probé pytest-timeout: un test colgado ahora falla en 9 segundos en vez de trabar la corrida
+  3. Migré un cron viejo a una cola con Redis, tardé 2 días porque nadie sabía qué hacía el script
+  4. En una entrevista técnica me preguntaron por índices en Postgres y no supe explicar la diferencia entre B-tree y hash
+
+--- corrida 1: respuesta cruda del modelo ---
+1|¿Cómo reaccionó tu equipo cuando falló el deploy el viernes?
+2|¿Qué cambios hiciste en pytest-timeout para lograr la mejora en el tiempo de espera?
+3|¿Qué sucedió después de que migraste el cron a la cola con Redis, ¿cambiaron algo en la forma de trabajo?
+4|¿Qué explicaste en la entrevista técnica sobre la diferencia entre B-tree y hash en Postgres?
+--- el parser se queda con 3 ---
+  [1] ¿Cómo reaccionó tu equipo cuando falló el deploy el viernes?
+  [2] ¿Qué cambios hiciste en pytest-timeout para lograr la mejora en el tiempo de espera?
+  [4] ¿Qué explicaste en la entrevista técnica sobre la diferencia entre B-tree y hash en Postgres?
+
+--- corrida 2: respuesta cruda del modelo ---
+1|¿Cómo se sintió al descubrir la variable de entorno que faltaba en producción?
+2|¿Qué problemas te causó la cola con Redis cuando migraste el cron viejo?
+3|¿Qué te enseñó la entrevista técnica sobre índices en Postgres?
+4|¿Qué hubiera hecho diferente al migrar el cron viejo si hubiera tenido más ayuda de los compañeros?
+5|¿Cómo te resultó el uso de pytest-timeout en los tests después de la prueba inicial?
+--- el parser se queda con 4 ---
+  [1] ¿Cómo se sintió al descubrir la variable de entorno que faltaba en producción?
+  [2] ¿Qué problemas te causó la cola con Redis cuando migraste el cron viejo?
+  [3] ¿Qué te enseñó la entrevista técnica sobre índices en Postgres?
+  [4] ¿Qué hubiera hecho diferente al migrar el cron viejo si hubiera tenido más ayuda de los compañeros?
+
+--- corrida 3: respuesta cruda del modelo ---
+1|¿Qué pasó con la aplicación después de ese deploy fallido un viernes?
+2|¿Cómo lograste instalar y configurar pytest-timeout en tu proyecto?
+3|¿Qué hicieron cuando descubrieron que nadie sabía qué hacía el script del cron?
+4|¿Cómo te explicarías la diferencia entre B-tree y hash en una entrevista técnica hoy?
+--- el parser se queda con 4 ---
+  [1] ¿Qué pasó con la aplicación después de ese deploy fallido un viernes?
+  [2] ¿Cómo lograste instalar y configurar pytest-timeout en tu proyecto?
+  [3] ¿Qué hicieron cuando descubrieron que nadie sabía qué hacía el script del cron?
+  [4] ¿Cómo te explicarías la diferencia entre B-tree y hash en una entrevista técnica hoy?

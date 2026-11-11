@@ -1,0 +1,39 @@
+##### DESPUES
+Ideas:
+  1. Tuve un deploy que falló un viernes por una variable de entorno que faltaba en producción
+  2. Probé pytest-timeout: un test colgado ahora falla en 9 segundos en vez de trabar la corrida
+  3. Migré un cron viejo a una cola con Redis, tardé 2 días porque nadie sabía qué hacía el script
+  4. En una entrevista técnica me preguntaron por índices en Postgres y no supe explicar la diferencia entre B-tree y hash
+
+--- corrida 1: respuesta cruda del modelo ---
+1|¿Qué sucedió después con la variable de entorno que faltaba en producción?
+2|¿Aún usás pytest-timeout en lugar de que el test se colgara la corrida?
+3|¿Qué hiciste con el script que migraste a una cola con Redis después de terminar?
+4|¿Pudiste investigar y explicar la diferencia entre B-tree y hash después de la entrevista?
+--- el parser se queda con 4 ---
+  [1] ¿Qué sucedió después con la variable de entorno que faltaba en producción?
+  [2] ¿Aún usás pytest-timeout en lugar de que el test se colgara la corrida?
+  [3] ¿Qué hiciste con el script que migraste a una cola con Redis después de terminar?
+  [4] ¿Pudiste investigar y explicar la diferencia entre B-tree y hash después de la entrevista?
+
+--- corrida 2: respuesta cruda del modelo ---
+1|¿Qué pasó con la variable de entorno después de que el deploy falló?
+2|¿Aún uses pytest-timeout para los tests que colgaban?
+3|¿Qué sucedió con el script que migraste a la cola con Redis después de 2 días?
+4|¿Expliqué la diferencia entre B-tree y hash en alguna otra entrevista técnica después de esa?
+--- el parser se queda con 4 ---
+  [1] ¿Qué pasó con la variable de entorno después de que el deploy falló?
+  [2] ¿Aún uses pytest-timeout para los tests que colgaban?
+  [3] ¿Qué sucedió con el script que migraste a la cola con Redis después de 2 días?
+  [4] ¿Expliqué la diferencia entre B-tree y hash en alguna otra entrevista técnica después de esa?
+
+--- corrida 3: respuesta cruda del modelo ---
+1|¿Qué pasó con el deploy que falló por falta de variable de entorno en producción?
+2|¿Cómo queda el comportamiento de pytest-timeout ahora que falla en 9 segundos en vez de bloquear la corrida?
+3|¿Qué sucedió con el script que migraste a la cola con Redis después de 2 días?
+4|¿Cómo explicarías ahora la diferencia entre B-tree y hash en Postgres después de la entrevista técnica?
+--- el parser se queda con 4 ---
+  [1] ¿Qué pasó con el deploy que falló por falta de variable de entorno en producción?
+  [2] ¿Cómo queda el comportamiento de pytest-timeout ahora que falla en 9 segundos en vez de bloquear la corrida?
+  [3] ¿Qué sucedió con el script que migraste a la cola con Redis después de 2 días?
+  [4] ¿Cómo explicarías ahora la diferencia entre B-tree y hash en Postgres después de la entrevista técnica?
