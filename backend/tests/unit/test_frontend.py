@@ -101,4 +101,5 @@ def test_get_raiz_sirve_el_panel():
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert "<title>Postline</title>" in response.text
-    assert response.text == HTML
+    # Se comparan BYTES: read_text() convierte los finales de línea CRLF de Windows a LF y la app sirve el archivo tal cual.
+    assert response.content == (PROJECT_ROOT / "frontend" / "index.html").read_bytes()
