@@ -17,6 +17,7 @@ from app.integrations.linkedin.client import get_linkedin_client
 from app.modules.content.router import auth_router as linkedin_auth_router
 from app.modules.content.router import router as content_router
 from app.modules.content.scheduler import start_scheduler
+from app.shared.notifications.system import SystemNotifier
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,11 @@ async def lifespan(_app: FastAPI):
     settings = get_settings()
     logger.info("Arrancando. Zona horaria: %s", settings.timezone)
     # SCHEDULER_ENABLED=false (o los tests) -> no se publica nada solo.
-    scheduler = start_scheduler(SessionLocal, get_linkedin_client(), settings) if settings.scheduler_enabled else None
+    scheduler = (
+        start_scheduler(SessionLocal, get_linkedin_client(), settings, SystemNotifier())
+        if settings.scheduler_enabled
+        else None
+    )
     yield
     if scheduler is not None:
         scheduler.shutdown(wait=False)

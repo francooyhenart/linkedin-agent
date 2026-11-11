@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings
 from app.integrations.linkedin.client import LinkedInClient
 from app.modules.content.publishing import PublishingService
+from app.shared.notifications.system import Notifier
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ def run_tick(
     session_factory: Callable[[], Session],
     linkedin: LinkedInClient,
     settings: Settings,
+    notifier: Notifier | None = None,
 ) -> None:
     """Una pasada. Nunca lanza: si algo falla se registra y APScheduler vuelve a intentar en un minuto."""
     try:
@@ -34,6 +36,8 @@ def run_tick(
                 linkedin,
                 settings.tzinfo,
                 max_late=timedelta(hours=settings.max_late_hours),
+                notifier=notifier,
+                notify_url=f"http://127.0.0.1:{settings.port}/#calendario",  # la app solo escucha en 127.0.0.1
             ).publish_due_posts()
     except Exception:  # noqa: BLE001 - por ejemplo, Postgres caído
         logger.exception("Falló la pasada del scheduler; se reintenta en 1 minuto")
@@ -43,13 +47,14 @@ def start_scheduler(
     session_factory: Callable[[], Session],
     linkedin: LinkedInClient,
     settings: Settings,
+    notifier: Notifier | None = None,
 ) -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone=settings.tzinfo)
     scheduler.add_job(
         run_tick,
         "interval",
         minutes=1,
-        args=[session_factory, linkedin, settings],
+        args=[session_factory, linkedin, settings, notifier],
         next_run_time=datetime.now(settings.tzinfo),  # una pasada apenas arranca la app (publica lo atrasado)
         max_instances=1,  # si una pasada tarda más de un minuto, no se superponen
         coalesce=True,  # si se perdieron pasadas (compu dormida), se hace una sola

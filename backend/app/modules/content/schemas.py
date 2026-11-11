@@ -192,6 +192,7 @@ class SettingsUpdate(BaseModel):
     max_chars: int | None = None
     model: str | None = None
     style_examples: str | None = None
+    notify_ready: bool | None = None
 
 
 class SettingsOut(BaseModel):
@@ -203,3 +204,4 @@ class SettingsOut(BaseModel):
     model: str
     style_examples: str
     banned: list[str]
+    notify_ready: bool

@@ -44,13 +44,17 @@ from app.modules.content.exceptions import (
     PostNotFoundError,
 )
 from app.modules.content.models import PostStatus
+from app.modules.content.notifications import build_manual_publish_message
 from app.modules.content.repository import ContentRepository, PostRow
+from app.shared.notifications.system import Notifier
 
 logger = logging.getLogger(__name__)
 
 # Los datos de la conexión con LinkedIn viven en la tabla settings, con estas claves.
 # NO están en EDITABLE_SETTINGS (service.py): por eso nunca salen por GET /settings.
 LINKEDIN_KEYS = ["li_token", "li_sub", "li_name", "li_expires_at"]
+# Interruptor de las notificaciones (Ajustes). Es un ajuste editable: vive en la tabla settings como "true"/"false".
+NOTIFY_READY_KEY = "notify_ready"
 
 API_VERSION_WARN_MONTHS = 10  # LinkedIn da de baja cada versión al año: se avisa con más de 10 meses
 MAX_POSTS_PER_TICK = 20  # tope de seguridad por pasada del scheduler
@@ -100,6 +104,8 @@ class PublishingService:
         tz: ZoneInfo,
         max_late: timedelta,
         now: Callable[[], datetime] | None = None,
+        notifier: Notifier | None = None,
+        notify_url: str | None = None,
     ):
         self.session = session  # solo para commit/rollback; las consultas las hace el repository
         self.repo = ContentRepository(session)
@@ -107,6 +113,9 @@ class PublishingService:
         self.tz = tz
         self.max_late = max_late
         self._now = now or (lambda: datetime.now(tz))
+        self.notifier = notifier  # None = sin avisos (por ejemplo, en los requests del panel)
+        self.notify_url = notify_url  # a dónde lleva el aviso (en Windows se abre al tocarlo)
+        self._became_manual: list[str] = []  # textos de los posts que esta pasada dejó en "ready"
 
     # ================================================================== conexión con LinkedIn
     def get_linkedin_status(self) -> LinkedInStatus:
@@ -157,7 +166,15 @@ class PublishingService:
     def publish_due_posts(self) -> None:
         """Lo que hace el scheduler cada minuto: publica los posts programados cuya hora ya llegó.
 
-        Nunca lanza: si una publicación falla, se registra y se sigue con la próxima."""
+        Nunca lanza: si una publicación falla, se registra y se sigue con la próxima.
+        Al final, si algún post quedó "para publicar a mano" (ready), avisa UNA vez por toda la pasada."""
+        self._became_manual = []
+        try:
+            self._publish_due_posts()
+        finally:
+            self._notify_manual(self._became_manual)
+
+    def _publish_due_posts(self) -> None:
         for _ in range(MAX_POSTS_PER_TICK):
             try:
                 claim, progressed = self._claim_next_due()
@@ -178,6 +195,20 @@ class PublishingService:
                         claim.post_id,
                     )
                     self.session.rollback()
+
+    def _notify_manual(self, texts: list[str]) -> None:
+        """Aviso de "hay posts para publicar a mano". Se llama DESPUÉS de los commits (el estado ya quedó guardado)
+        y nunca lanza: si falla el aviso, el scheduler sigue como si nada."""
+        if not texts or self.notifier is None:
+            return
+        try:
+            enabled = self.repo.get_settings_map(keys=[NOTIFY_READY_KEY]).get(NOTIFY_READY_KEY, "true") != "false"
+            self.session.rollback()  # fue una lectura: se cierra la transacción
+            if enabled:
+                title, body = build_manual_publish_message(texts)
+                self.notifier.notify(title, body, self.notify_url)  # vuelve enseguida: el trabajo va en otro hilo
+        except Exception:  # noqa: BLE001
+            logger.warning("No pude avisar que hay posts para publicar a mano", exc_info=True)
 
     def publish_post_now(self, post_id: int) -> PostRow:
         """Botón "Publicar ahora". Usa el mismo camino de reclamo que el scheduler."""
@@ -204,10 +235,12 @@ class PublishingService:
 
         if now - post.scheduled_at > self.max_late:  # la compu estuvo apagada: que decida el usuario
             self._set_and_commit(post, PostStatus.READY, LATE_NOTE)
+            self._became_manual.append(post.text)
             return None, True
         connection = self._read_connection()
         if connection is None:
             self._set_and_commit(post, PostStatus.READY, NOT_CONNECTED_NOTE)
+            self._became_manual.append(post.text)
             return None, True
         if not post.text.strip():
             self._set_and_commit(post, PostStatus.FAILED, EmptyPostError.default_message)

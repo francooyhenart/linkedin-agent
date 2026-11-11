@@ -37,6 +37,7 @@ from app.modules.content.exceptions import (
     ReservedStatusError,
 )
 from app.modules.content.models import Idea, PostMetric, PostStatus
+from app.modules.content.publishing import NOTIFY_READY_KEY
 from app.modules.content.repository import ContentRepository, PostRow
 from app.modules.content.schemas import (
     GenerateIn,
@@ -55,8 +56,14 @@ SUGGESTION_SOURCE_LIMIT = 20  # cuántas ideas del banco se le muestran al model
 
 # Ajustes que el usuario puede ver y editar. Los tokens de LinkedIn (li_*) viven en la misma tabla
 # pero NO están en esta lista, así que nunca salen por la API de ajustes.
-EDITABLE_SETTINGS = ["post_days", "post_time", "max_chars", "model", "style_examples"]
-DEFAULT_SETTINGS = {"post_days": "1,3", "post_time": "09:00", "max_chars": "300", "style_examples": ""}
+EDITABLE_SETTINGS = ["post_days", "post_time", "max_chars", "model", "style_examples", NOTIFY_READY_KEY]
+DEFAULT_SETTINGS = {
+    "post_days": "1,3",
+    "post_time": "09:00",
+    "max_chars": "300",
+    "style_examples": "",
+    NOTIFY_READY_KEY: "true",  # avisar con una notificación del sistema cuando un post queda para publicar a mano
+}
 
 
 class PostWriter(Protocol):
@@ -79,6 +86,7 @@ class UserSettings:
     model: str
     style_examples: str
     banned: list[str]
+    notify_ready: bool
 
 
 @dataclass
@@ -142,6 +150,7 @@ class ContentService:
             model=merged["model"].strip() or self.default_model,
             style_examples=merged["style_examples"],
             banned=text_rules.BANNED,
+            notify_ready=merged[NOTIFY_READY_KEY] != "false",
         )
 
     def update_settings(self, data: SettingsUpdate) -> UserSettings:
@@ -158,6 +167,8 @@ class ContentService:
             values["max_chars"] = max(80, min(3000, values["max_chars"]))
         if "model" in values:
             values["model"] = values["model"].strip()
+        if NOTIFY_READY_KEY in values:
+            values[NOTIFY_READY_KEY] = "true" if values[NOTIFY_READY_KEY] else "false"
         self.repo.upsert_settings({key: str(value) for key, value in values.items()})
         self.session.commit()
         return self.get_user_settings()

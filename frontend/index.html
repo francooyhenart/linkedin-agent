@@ -44,6 +44,8 @@ a{color:inherit}
 /* el resaltador de la marca, como marca de la sección activa */
 .side nav a[aria-current="page"]::before{content:"";position:absolute;left:.25rem;top:50%;width:.3rem;height:.9rem;margin-top:-.45rem;background:var(--mark);transform:skewX(-14deg)}
 .side nav .settings{margin-top:auto}
+/* cantidad de posts "Publicar a mano" (estado ready), al lado de Calendario */
+.badge{display:inline-block;margin-left:.5rem;min-width:1.25rem;padding:0 .4rem;border-radius:999px;background:var(--ready);color:var(--mark-ink);font-size:.75rem;font-weight:700;line-height:1.25rem;text-align:center;font-variant-numeric:tabular-nums}
 .health{display:flex;flex-direction:column;gap:.4rem;padding:.8rem .5rem 0;border-top:1px solid var(--line);color:var(--muted);font-size:.85rem}
 .health span::before{content:"";display:inline-block;width:.5rem;height:.5rem;border-radius:50%;margin-right:.4rem;background:var(--fail);vertical-align:.05rem}
 .health span.ok::before{background:#3E9B62}
@@ -201,7 +203,7 @@ ol.help{padding-left:1.1rem}
          (href="#vista", y esa vista se registra en VIEWS más abajo). -->
     <div class="grp" data-module="content">
       <h2 class="grp-title">Contenido</h2>
-      <a href="#calendario">Calendario</a>
+      <a href="#calendario">Calendario<span class="badge" id="readyBadge" role="img" hidden></span></a>
       <a href="#ideas">Ideas</a>
       <a href="#metricas">Métricas</a>
     </div>
@@ -289,6 +291,10 @@ ol.help{padding-left:1.1rem}
           <textarea id="sStyle" rows="6" placeholder="Pegá 2 o 3 posts que hayas escrito vos (o que te gusten), separados por una línea con ---"></textarea>
         </label>
         <p class="help" style="margin-top:-.6rem">Es lo que más ayuda a que suene a vos: el modelo copia el ritmo y el tono, no los temas.</p>
+        <div>
+          <label style="display:flex;gap:.5rem;align-items:center;font-weight:500;font-size:.9rem"><input type="checkbox" id="sNotify"> Avisarme cuando un post quede para publicar a mano</label>
+          <p class="help">Muestra una notificación del sistema (Windows, macOS o Linux). Funciona aunque el navegador esté cerrado, mientras la app esté corriendo.</p>
+        </div>
         <div><button class="btn primary" id="saveSettings">Guardar ajustes</button></div>
       </div>
       <div class="panel stack" id="liPanel"></div>
@@ -743,7 +749,7 @@ $("#mtable").addEventListener("change", act(async e => {
 function renderSettings() {
   const s = S.settings, on = (s.post_days || "").split(",");
   $("#days").innerHTML = DOW.map((d, i) => `<label><input type="checkbox" value="${i}" ${on.includes(String(i)) ? "checked" : ""}><span>${d}</span></label>`).join("");
-  $("#sTime").value = s.post_time; $("#sMax").value = s.max_chars; $("#sModel").value = s.model; $("#sStyle").value = s.style_examples;
+  $("#sTime").value = s.post_time; $("#sMax").value = s.max_chars; $("#sModel").value = s.model; $("#sStyle").value = s.style_examples; $("#sNotify").checked = s.notify_ready;
   const li = S.status.linkedin || {};
   $("#liPanel").innerHTML = `<h2>LinkedIn</h2>` + (
     !li.configured ? `<p class="help">Sin conectar, la app igual funciona: a la hora programada el post queda como “Publicar a mano” y lo pegás vos con un clic. Para que publique solo:</p>
@@ -760,7 +766,7 @@ function renderSettings() {
 $("#saveSettings").onclick = act(async () => {
   const days = [...$("#days").querySelectorAll("input:checked")].map(i => i.value).join(",");
   if (!days) throw new Error("Elegí al menos un día.");
-  S.settings = await api(`${API}/settings`, { method: "PUT", body: { post_days: days, post_time: $("#sTime").value, max_chars: $("#sMax").value, model: $("#sModel").value.trim(), style_examples: $("#sStyle").value } });
+  S.settings = await api(`${API}/settings`, { method: "PUT", body: { post_days: days, post_time: $("#sTime").value, max_chars: $("#sMax").value, model: $("#sModel").value.trim(), style_examples: $("#sStyle").value, notify_ready: $("#sNotify").checked } });
   toast("Ajustes guardados.");
 });
 
@@ -778,7 +784,15 @@ $("#newBtn").onclick = () => openEditor({ status: "draft" });
 
 const VIEWS = { calendario: renderCalendar, ideas: renderIdeas, metricas: renderMetrics, ajustes: renderSettings };
 function view() { const v = location.hash.slice(1); return VIEWS[v] ? v : "calendario"; }
-const refresh = act(async () => { await VIEWS[view()](); });
+/* Cuántos posts esperan "Publicar a mano": número en el menú y en el título de la pestaña. */
+async function updateReadyCount() {
+  const n = (await api(`${API}/posts?status=ready`)).length;
+  const badge = $("#readyBadge");
+  badge.hidden = !n; badge.textContent = n;
+  badge.setAttribute("aria-label", `${n} ${n === 1 ? "post" : "posts"} para publicar a mano`);
+  document.title = n ? `(${n}) Postline` : "Postline";
+}
+const refresh = act(async () => { await VIEWS[view()](); updateReadyCount().catch(() => {}); });
 function route() {
   const v = view();
   for (const k of Object.keys(VIEWS)) $(`#v-${k}`).hidden = k !== v;
@@ -807,7 +821,10 @@ matchMedia("(min-width: 861px)").addEventListener("change", e => { if (e.matches
 act(async () => {
   await Promise.all([loadSettings(), loadStatus()]);
   route();
-  setInterval(() => { loadStatus().catch(() => {}); if (view() === "calendario" && !$("#ed").open) refresh(); }, 60000);
+  setInterval(() => {
+    loadStatus().catch(() => {}); updateReadyCount().catch(() => {});
+    if (view() === "calendario" && !$("#ed").open) refresh();
+  }, 60000);
 })();
 </script>
 </body>
