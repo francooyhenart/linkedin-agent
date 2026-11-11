@@ -1,9 +1,9 @@
-# Arquitectura de Postline
+# Arquitectura de LinkedIn Agent
 
 Este documento explica **cómo está armado el código y por qué**, pensado para alguien que está aprendiendo.
 Si solo querés instalar y usar la app, andá al [README](README.md).
 
-Postline es un **monolito modular en capas**. Suena grande, pero la idea es simple:
+LinkedIn Agent es un **monolito modular en capas**. Suena grande, pero la idea es simple:
 
 - **Monolito**: es *un solo programa* (un solo proceso de Python). No hay servicios sueltos hablándose por la red.
 - **Modular**: el código está dividido en *módulos* (hoy `content`; mañana `jobs`) que no se meten en los asuntos del otro.
@@ -174,7 +174,7 @@ Un **microservicio** es un programa chico e independiente que se comunica con ot
 equipos grandes que necesitan desplegar por separado o partes que escalan distinto. Tienen un costo enorme:
 redes que fallan, versiones que hay que coordinar, más cosas que instalar y vigilar.
 
-Postline es **una app para una sola persona que corre en su propia compu**. Para eso:
+LinkedIn Agent es **una app para una sola persona que corre en su propia compu**. Para eso:
 
 - Un solo proceso es **mucho más simple de instalar y de depurar** (un comando, un log).
 - Una llamada entre módulos es una llamada a una función: no falla "por la red" ni hay que serializar nada.

@@ -1,4 +1,4 @@
-# Postline
+# LinkedIn Agent
 
 Planificador de posts de LinkedIn que corre **en tu propia compu**. Anotás ideas, un modelo de lenguaje local
 ([Ollama](https://ollama.com)) arma borradores cortos en inglés, los revisás en un calendario y los publicás
@@ -54,8 +54,8 @@ Todos los comandos se corren desde la carpeta del proyecto, salvo donde diga lo 
 ### 1. Bajar el código y crear tu archivo `.env`
 
 ```bash
-git clone <URL-del-repositorio> postline
-cd postline
+git clone https://github.com/francooyhenart/linkedin-agent.git
+cd linkedin-agent
 ```
 
 Copiá el archivo de ejemplo. El `.env` es **tuyo y no se sube a git**: ahí van tus claves.
@@ -79,8 +79,8 @@ docker compose ps        # esperá a que diga "healthy"
 ```
 
 Si el puerto 5432 ya lo usa otro Postgres, poné `POSTGRES_PORT=5433` en tu `.env` y cambiá también el puerto en `DATABASE_URL`.
-Si ya tenés **otra copia de Postline** corriendo en la misma compu, además definí un nombre distinto para el contenedor
-antes de levantarlo (`export COMPOSE_PROJECT_NAME=postline2` en bash, `$env:COMPOSE_PROJECT_NAME="postline2"` en PowerShell).
+Si ya tenés **otra copia de LinkedIn Agent** corriendo en la misma compu, además definí un nombre distinto para el contenedor
+antes de levantarlo (`export COMPOSE_PROJECT_NAME=linkedin-agent2` en bash, `$env:COMPOSE_PROJECT_NAME="linkedin-agent2"` en PowerShell).
 
 ### 3. Instalar Python y las dependencias
 
@@ -187,7 +187,7 @@ cerrado, mientras la app esté corriendo. Se apaga en *Ajustes → Avisarme cuan
 - **macOS** y **Linux**: no probado. En macOS usa `osascript` (puede pedirte permiso en *Ajustes del Sistema → Notificaciones*);
   en Linux usa `notify-send` (paquete `libnotify-bin` o `libnotify`) y un servidor de notificaciones del escritorio.
   Si falta algo, la app lo anota en el log y sigue funcionando; el número del menú y el título de la pestaña
-  (`(1) Postline`) siguen avisando dentro del panel.
+  (`(1) LinkedIn Agent`) siguen avisando dentro del panel.
 
 ## ¿`pyproject.toml` o `requirements.lock`?
 

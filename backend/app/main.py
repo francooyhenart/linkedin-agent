@@ -56,7 +56,7 @@ async def lifespan(_app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Postline", lifespan=lifespan)
+    app = FastAPI(title="linkedin-agent", lifespan=lifespan)
     app.add_exception_handler(AppError, handle_app_error)
     app.include_router(content_router)
     app.include_router(linkedin_auth_router)

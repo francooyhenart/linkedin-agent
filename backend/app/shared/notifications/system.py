@@ -49,7 +49,7 @@ class Command:
 # ---------------------------------------------------------------- Windows
 # Script CONSTANTE. Arma el aviso en un documento XML asignando el texto con InnerText (el DOM lo escapa solo),
 # así que el texto del usuario nunca se interpreta ni como código ni como XML.
-# Si POSTLINE_DRY_RUN está definida, imprime el XML en vez de mostrar el aviso (lo usan los tests).
+# Si LINKEDIN_AGENT_DRY_RUN está definida, imprime el XML en vez de mostrar el aviso (lo usan los tests).
 _WINDOWS_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -58,13 +58,13 @@ $null = [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, Con
 $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
 $xml.LoadXml('<toast><visual><binding template="ToastGeneric"><text/><text/></binding></visual></toast>')
 $texts = $xml.GetElementsByTagName('text')
-$texts.Item(0).InnerText = $env:POSTLINE_TITLE
-$texts.Item(1).InnerText = $env:POSTLINE_BODY
-if ($env:POSTLINE_URL) {
+$texts.Item(0).InnerText = $env:LINKEDIN_AGENT_TITLE
+$texts.Item(1).InnerText = $env:LINKEDIN_AGENT_BODY
+if ($env:LINKEDIN_AGENT_URL) {
     $xml.DocumentElement.SetAttribute('activationType', 'protocol')
-    $xml.DocumentElement.SetAttribute('launch', $env:POSTLINE_URL)
+    $xml.DocumentElement.SetAttribute('launch', $env:LINKEDIN_AGENT_URL)
 }
-if ($env:POSTLINE_DRY_RUN) { Write-Output $xml.GetXml(); exit 0 }
+if ($env:LINKEDIN_AGENT_DRY_RUN) { Write-Output $xml.GetXml(); exit 0 }
 $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
 $appId = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
 [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId).Show($toast)
@@ -77,7 +77,7 @@ const env = $.NSProcessInfo.processInfo.environment;
 const read = (key) => { const value = env.objectForKey(key); return value ? ObjC.unwrap(value) : ''; };
 const app = Application.currentApplication();
 app.includeStandardAdditions = true;
-app.displayNotification(read('POSTLINE_BODY'), { withTitle: read('POSTLINE_TITLE') });
+app.displayNotification(read('LINKEDIN_AGENT_BODY'), { withTitle: read('LINKEDIN_AGENT_TITLE') });
 """
 
 
@@ -105,9 +105,9 @@ def windows_command(title: str, body: str, url: str | None, powershell: str | No
     if exe is None:
         return None
     encoded = base64.b64encode(_WINDOWS_SCRIPT.encode("utf-16-le")).decode("ascii")  # formato de -EncodedCommand
-    env = {"POSTLINE_TITLE": _clean(title), "POSTLINE_BODY": _clean(body)}
+    env = {"LINKEDIN_AGENT_TITLE": _clean(title), "LINKEDIN_AGENT_BODY": _clean(body)}
     if safe_url := _http_url_or_none(url):
-        env["POSTLINE_URL"] = safe_url
+        env["LINKEDIN_AGENT_URL"] = safe_url
     argv = [exe, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded]
     return Command(argv, env)
 
@@ -118,7 +118,7 @@ def macos_command(title: str, body: str, osascript: str | None = None) -> Comman
         return None
     return Command(
         [exe, "-l", "JavaScript", "-e", _MACOS_SCRIPT],
-        {"POSTLINE_TITLE": _clean(title), "POSTLINE_BODY": _clean(body)},
+        {"LINKEDIN_AGENT_TITLE": _clean(title), "LINKEDIN_AGENT_BODY": _clean(body)},
     )
 
 
@@ -134,7 +134,7 @@ def linux_command(title: str, body: str, notify_send: str | None = None) -> Comm
         return None
     # Sin script y sin shell: título y cuerpo son argumentos sueltos, después de "--" (así un texto que empieza
     # con "-" no se confunde con una opción).
-    argv = [exe, "--app-name=Postline", "--expire-time=10000", "--", _escape_markup(_clean(title)), _escape_markup(_clean(body))]
+    argv = [exe, "--app-name=LinkedIn Agent", "--expire-time=10000", "--", _escape_markup(_clean(title)), _escape_markup(_clean(body))]
     return Command(argv)
 
 

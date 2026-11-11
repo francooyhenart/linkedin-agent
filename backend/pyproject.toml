@@ -1,7 +1,7 @@
 [project]
 name = "linkedin-agent-backend"
 version = "0.1.0"
-description = "Postline: planificador local de posts de LinkedIn"
+description = "linkedin-agent: planificador local de posts de LinkedIn"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.110,<1",

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Postline</title>
+<title>LinkedIn Agent</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖍️</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -192,12 +192,12 @@ ol.help{padding-left:1.1rem}
 <!-- Barra solo para pantallas chicas: marca + botón que abre el menú -->
 <header class="mobilebar">
   <button class="btn icon" id="menuBtn" aria-label="Abrir menú" aria-expanded="false" aria-controls="side">☰</button>
-  <div class="brand"><i aria-hidden="true"></i>Postline</div>
+  <div class="brand"><i aria-hidden="true"></i>LinkedIn Agent</div>
 </header>
 <div class="scrim" id="scrim" hidden></div>
 
 <aside class="side" id="side">
-  <div class="brand"><i aria-hidden="true"></i>Postline</div>
+  <div class="brand"><i aria-hidden="true"></i>LinkedIn Agent</div>
   <nav aria-label="Secciones">
     <!-- Un bloque .grp por módulo. Para sumar "Empleos": copiar este bloque con otro título y sus enlaces
          (href="#vista", y esa vista se registra en VIEWS más abajo). -->
@@ -790,7 +790,7 @@ async function updateReadyCount() {
   const badge = $("#readyBadge");
   badge.hidden = !n; badge.textContent = n;
   badge.setAttribute("aria-label", `${n} ${n === 1 ? "post" : "posts"} para publicar a mano`);
-  document.title = n ? `(${n}) Postline` : "Postline";
+  document.title = n ? `(${n}) LinkedIn Agent` : "LinkedIn Agent";
 }
 const refresh = act(async () => { await VIEWS[view()](); updateReadyCount().catch(() => {}); });
 function route() {

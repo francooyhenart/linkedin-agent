@@ -86,7 +86,7 @@ def test_el_punto_rojo_del_menu_depende_del_modelo_y_del_vencimiento_de_linkedin
 def test_el_indicador_de_posts_para_publicar_a_mano_esta_en_el_menu_y_en_el_titulo():
     assert 'id="readyBadge"' in HTML.split('data-module="content"')[1].split("</div>")[0]  # al lado de Calendario
     count = HTML.split("async function updateReadyCount()")[1].split("const refresh")[0]
-    assert "status=ready" in count and 'document.title = n ? `(${n}) Postline` : "Postline"' in count
+    assert "status=ready" in count and 'document.title = n ? `(${n}) LinkedIn Agent` : "LinkedIn Agent"' in count
     assert "updateReadyCount()" in HTML.split("const refresh = act(")[1].split("\n")[0]  # se actualiza al refrescar
 
 
@@ -100,6 +100,6 @@ def test_get_raiz_sirve_el_panel():
     response = TestClient(app).get("/")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
-    assert "<title>Postline</title>" in response.text
+    assert "<title>LinkedIn Agent</title>" in response.text
     # Se comparan BYTES: read_text() convierte los finales de línea CRLF de Windows a LF y la app sirve el archivo tal cual.
     assert response.content == (PROJECT_ROOT / "frontend" / "index.html").read_bytes()

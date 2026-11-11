@@ -46,7 +46,7 @@ def test_windows_el_texto_va_por_variables_de_entorno_no_dentro_del_script(paylo
     command = windows_command(payload, payload, "http://127.0.0.1:8000/#calendario", powershell=POWERSHELL)
 
     assert isinstance(command.argv, list) and all(isinstance(a, str) for a in command.argv)
-    assert command.env["POSTLINE_TITLE"] == payload and command.env["POSTLINE_BODY"] == payload
+    assert command.env["LINKEDIN_AGENT_TITLE"] == payload and command.env["LINKEDIN_AGENT_BODY"] == payload
     assert payload not in " ".join(command.argv)  # ni crudo...
     import base64
 
@@ -64,7 +64,7 @@ def test_windows_el_script_es_identico_para_cualquier_texto():
 @pytest.mark.parametrize("payload", HOSTILE)
 def test_macos_el_texto_va_por_variables_de_entorno_no_dentro_del_script(payload):
     command = macos_command(payload, payload, osascript="osascript")
-    assert command.env == {"POSTLINE_TITLE": payload, "POSTLINE_BODY": payload}
+    assert command.env == {"LINKEDIN_AGENT_TITLE": payload, "LINKEDIN_AGENT_BODY": payload}
     assert all(payload not in arg for arg in command.argv)
     assert command.argv == macos_command("x", "y", osascript="osascript").argv
 
@@ -86,15 +86,15 @@ def test_linux_escapa_el_marcado():
 
 
 def test_el_caracter_nulo_se_saca_porque_los_procesos_no_lo_aceptan():
-    assert windows_command("a\x00b", "c\x00d", None, powershell=POWERSHELL).env["POSTLINE_TITLE"] == "ab"
+    assert windows_command("a\x00b", "c\x00d", None, powershell=POWERSHELL).env["LINKEDIN_AGENT_TITLE"] == "ab"
     assert linux_command("a\x00b", "c", notify_send="notify-send").argv[-2] == "ab"
 
 
 def test_windows_solo_acepta_urls_web_para_abrir_al_tocar():
     ok = windows_command("t", "b", "http://127.0.0.1:8000/#calendario", powershell=POWERSHELL)
-    assert ok.env["POSTLINE_URL"] == "http://127.0.0.1:8000/#calendario"
+    assert ok.env["LINKEDIN_AGENT_URL"] == "http://127.0.0.1:8000/#calendario"
     for bad in ("file:///C:/Windows/System32/calc.exe", "javascript:alert(1)", "calc.exe", "", None):
-        assert "POSTLINE_URL" not in windows_command("t", "b", bad, powershell=POWERSHELL).env
+        assert "LINKEDIN_AGENT_URL" not in windows_command("t", "b", bad, powershell=POWERSHELL).env
 
 
 def test_sistema_no_soportado_o_sin_el_programa_devuelve_none(monkeypatch):
@@ -111,7 +111,7 @@ def test_windows_real_un_post_hostil_se_muestra_literal_y_no_ejecuta_nada(payloa
     monkeypatch.chdir(tmp_path)  # si algo se ejecutara, el archivo canario aparecería acá
     command = windows_command(payload, payload + " (cuerpo)", "http://127.0.0.1:8000/#calendario")
     assert command is not None, "no se encontró Windows PowerShell"
-    dry = Command(command.argv, {**command.env, "POSTLINE_DRY_RUN": "1"})  # imprime el aviso en vez de mostrarlo
+    dry = Command(command.argv, {**command.env, "LINKEDIN_AGENT_DRY_RUN": "1"})  # imprime el aviso en vez de mostrarlo
 
     result = run_command(dry, timeout=60)
 
@@ -134,12 +134,12 @@ def test_el_proceso_se_lanza_con_lista_sin_shell_y_con_timeout(monkeypatch):
         return subprocess.CompletedProcess(argv, 0, b"", b"")
 
     monkeypatch.setattr(system.subprocess, "run", fake_run)
-    run_command(Command(["programa", "arg"], {"POSTLINE_BODY": "x"}), timeout=7)
+    run_command(Command(["programa", "arg"], {"LINKEDIN_AGENT_BODY": "x"}), timeout=7)
 
     assert seen["argv"] == ["programa", "arg"]
     assert not seen["kwargs"].get("shell")  # nunca shell=True
     assert seen["kwargs"]["timeout"] == 7
-    assert seen["kwargs"]["env"]["POSTLINE_BODY"] == "x"
+    assert seen["kwargs"]["env"]["LINKEDIN_AGENT_BODY"] == "x"
 
 
 def test_un_proceso_colgado_se_corta_por_timeout():
