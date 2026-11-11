@@ -2,7 +2,8 @@
 services:
   db:
     image: postgres:16
-    container_name: linkedin-agent-db
+    # Por defecto "linkedin-agent-db". Si definís COMPOSE_PROJECT_NAME, cambia con él (así se pueden tener dos copias).
+    container_name: ${COMPOSE_PROJECT_NAME:-linkedin-agent}-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-linkedin}
@@ -10,7 +11,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-linkedin_agent}
     ports:
       # 127.0.0.1: la base solo es accesible desde tu máquina, no desde la red.
-      - "127.0.0.1:5432:5432"
+      # Puerto de tu máquina: 5432 salvo que definas POSTGRES_PORT en el .env (por ejemplo si ya tenés otro Postgres).
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data   # volumen persistente: los datos sobreviven a `docker compose down`
     healthcheck:

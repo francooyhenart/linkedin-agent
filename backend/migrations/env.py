@@ -8,8 +8,8 @@ from alembic import context
 from app.core.config import get_settings
 from app.core.database import Base
 
-# Importar el registro es lo que "carga" los models de todos los módulos en Base.metadata.
-# Sin esto Alembic vería una base vacía y autogenerate borraría todo.
+# Importar el registro es lo que "carga" los models de todos los mÃ³dulos en Base.metadata.
+# Sin esto Alembic verÃ­a una base vacÃ­a y autogenerate borrarÃ­a todo.
 import app.core.models_registry  # noqa: F401
 
 # this is the Alembic Config object, which provides
@@ -27,7 +27,7 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
 
-# La URL sale de la configuración de la app (.env), no de alembic.ini: un solo lugar para el secreto.
+# La URL sale de la configuraciÃ³n de la app (.env), no de alembic.ini: un solo lugar para el secreto.
 # (% se duplica porque ConfigParser usa % para interpolar.)
 config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
 
@@ -79,7 +79,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            compare_type=True,  # detectar también cambios de tipo de columna
+            compare_type=True,  # detectar tambiÃ©n cambios de tipo de columna
         )
 
         with context.begin_transaction():

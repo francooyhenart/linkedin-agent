@@ -1,4 +1,4 @@
-"""Conexión a PostgreSQL con SQLAlchemy 2.0 en modo sincrónico.
+"""Conexión a PostgreSQL con SQLAlchemy 2.x en modo sincrónico.
 
 Piezas:
 - engine:         el "pool" de conexiones a la base (se crea una sola vez).

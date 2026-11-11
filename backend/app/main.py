@@ -1,7 +1,7 @@
 """Punto de entrada: crea la app de FastAPI.
 
-Registra los routers de cada módulo, arranca el scheduler y traduce las excepciones de dominio a respuestas HTTP.
-(Más adelante: montar el frontend.)
+Registra los routers de cada módulo, sirve el panel (frontend/index.html), arranca el scheduler y traduce las
+excepciones de dominio a respuestas HTTP.
 """
 import logging
 from contextlib import asynccontextmanager

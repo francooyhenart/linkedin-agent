@@ -3,7 +3,7 @@
 Foco: no mantener una transacción abierta mientras se espera al modelo, guardar lo que salió bien y
 devolver qué ideas fallaron y por qué.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 import pytest
 

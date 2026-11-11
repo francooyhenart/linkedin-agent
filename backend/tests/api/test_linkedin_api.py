@@ -11,7 +11,7 @@ from app.main import app
 from app.modules.content.dependencies import get_linkedin, get_post_writer
 from app.modules.content.repository import ContentRepository
 from app.modules.content.writer import OllamaPostWriter
-from tests.helpers import LinkedInCalls, future_expiry, linkedin_client, ollama_client, ollama_says
+from tests.helpers import LinkedInCalls, linkedin_client, ollama_client, ollama_says
 
 API = "/api/content"
 TOKEN = "AQX-token-super-secreto-123"

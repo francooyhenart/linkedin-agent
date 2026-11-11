@@ -1,7 +1,6 @@
 """El scheduler avisa cuando un post pasa a "Publicar a mano" (ready). Postgres real, LinkedIn y notificador simulados."""
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from app.modules.content.models import PostStatus
 from app.modules.content.publishing import PublishingService
